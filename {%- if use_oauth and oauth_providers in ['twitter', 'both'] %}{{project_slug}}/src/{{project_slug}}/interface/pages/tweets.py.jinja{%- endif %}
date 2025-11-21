@@ -1,0 +1,157 @@
+"""Twitter tweets page - view and post tweets."""
+
+import logging
+from typing import Optional
+
+from fastapi import Request
+import httpx
+from starlette.responses import RedirectResponse
+
+from nicegui import app, ui
+
+from {{ project_slug }}.infrastructure.oauth.oauth_config import validate_user_info
+
+
+@ui.page("/tweets")
+async def tweets_page(request: Request) -> Optional[RedirectResponse]:
+    """Display the latest 10 tweets from the authenticated Twitter user."""
+    user_info = app.storage.user.get("user_info", {})
+    oauth_provider = app.storage.user.get("oauth_provider")
+
+    # Redirect to login if not authenticated
+    if not validate_user_info(user_info):
+        app.storage.user.pop("user_info", None)
+        return RedirectResponse("/login")
+
+    # Redirect to home if not a Twitter user
+    if oauth_provider != "twitter":
+        ui.notify("This feature is only available for Twitter users", type="warning")
+        return RedirectResponse("/")
+
+    ui.label("My Latest Tweets").classes("text-h4 q-mb-md")
+
+    # Get the OAuth token
+    token = app.storage.user.get("oauth_token", {})
+    access_token = token.get("access_token")
+    user_id = user_info.get("sub")
+
+    if not access_token or not user_id:
+        ui.label("Unable to fetch tweets: Missing authentication token").classes(
+            "text-negative"
+        )
+        ui.button("Back to Home", on_click=lambda: ui.navigate.to("/")).classes(
+            "q-mt-md"
+        )
+        return None
+
+    # Tweet composition section
+    with ui.card().classes("q-mb-lg w-full"):
+        ui.label("Compose New Tweet").classes("text-h6 q-mb-sm")
+        tweet_input = ui.textarea(
+            label="What's happening?", placeholder="Write your tweet here..."
+        ).props("rows=3").classes("w-full")
+
+        char_count = ui.label("0 / 280").classes("text-caption text-grey")
+
+        async def post_tweet() -> None:
+            """Post a new tweet."""
+            tweet_text = tweet_input.value
+            if not tweet_text or not tweet_text.strip():
+                ui.notify("Tweet cannot be empty", type="warning")
+                return
+
+            if len(tweet_text) > 280:
+                ui.notify("Tweet is too long (max 280 characters)", type="warning")
+                return
+
+            try:
+                async with httpx.AsyncClient() as client:
+                    resp = await client.post(
+                        "https://api.twitter.com/2/tweets",
+                        headers={
+                            "Authorization": f"Bearer {access_token}",
+                            "Content-Type": "application/json",
+                        },
+                        json={"text": tweet_text},
+                    )
+
+                    if resp.status_code == 201:
+                        ui.notify("Tweet posted successfully!", type="positive")
+                        tweet_input.value = ""
+                        char_count.text = "0 / 280"
+                        # Refresh the page to show the new tweet
+                        ui.navigate.reload()
+                    else:
+                        ui.notify(
+                            f"Failed to post tweet: {resp.status_code}", type="negative"
+                        )
+                        logging.error(f"Twitter API error: {resp.text}")
+            except Exception as exception:
+                ui.notify(f"Error posting tweet: {str(exception)}", type="negative")
+                logging.exception("Failed to post tweet")
+
+        def update_char_count() -> None:
+            """Update character count display."""
+            count = len(tweet_input.value or "")
+            char_count.text = f"{count} / 280"
+            if count > 280:
+                char_count.classes("text-negative", remove="text-grey")
+            else:
+                char_count.classes("text-grey", remove="text-negative")
+
+        tweet_input.on("input", update_char_count)
+
+        ui.button("Post Tweet", on_click=post_tweet).props("color=info")
+
+    ui.separator().classes("q-my-md")
+
+    # Fetch tweets from Twitter API
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(
+                f"https://api.twitter.com/2/users/{user_id}/tweets",
+                headers={"Authorization": f"Bearer {access_token}"},
+                params={"max_results": 10, "tweet.fields": "created_at,public_metrics,text"},
+            )
+
+            if resp.status_code != 200:
+                ui.label(f"Error fetching tweets: {resp.status_code}").classes(
+                    "text-negative"
+                )
+                ui.label(f"Response: {resp.text}").classes("text-caption")
+            else:
+                data = resp.json()
+                tweets = data.get("data", [])
+
+                if not tweets:
+                    ui.label("No tweets found").classes("text-grey")
+                else:
+                    for tweet in tweets:
+                        with ui.card().classes("q-mb-md w-full"):
+                            ui.label(tweet.get("text", "")).classes("text-body1")
+
+                            created_at = tweet.get("created_at", "")
+                            if created_at:
+                                ui.label(f"Posted: {created_at}").classes(
+                                    "text-caption text-grey"
+                                )
+
+                            metrics = tweet.get("public_metrics", {})
+                            if metrics:
+                                with ui.row().classes("q-mt-sm"):
+                                    ui.label(f"❤️ {metrics.get('like_count', 0)}").classes(
+                                        "text-caption"
+                                    )
+                                    ui.label(
+                                        f"🔁 {metrics.get('retweet_count', 0)}"
+                                    ).classes("text-caption")
+                                    ui.label(
+                                        f"💬 {metrics.get('reply_count', 0)}"
+                                    ).classes("text-caption")
+
+    except Exception as exception:
+        ui.label(f"Error fetching tweets: {str(exception)}").classes("text-negative")
+        logging.exception("Failed to fetch tweets")
+
+    ui.button("Back to Home", on_click=lambda: ui.navigate.to("/")).classes("q-mt-md")
+    return None

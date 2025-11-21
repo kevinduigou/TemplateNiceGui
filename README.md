@@ -13,6 +13,7 @@ A [Copier](https://copier.readthedocs.io/) template for creating NiceGUI applica
 - 🚀 **CI/CD**: GitHub Actions workflow included
 - 🐳 **Docker Support**: Optional Docker and Docker Compose configuration
 - ⚡ **RQ Worker**: Optional support for long-running async tasks
+- 🔐 **OAuth Authentication**: Optional Google and/or Twitter OAuth integration
 
 ## Quick Start
 

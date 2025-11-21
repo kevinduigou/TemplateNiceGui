@@ -2,7 +2,16 @@
 
 from nicegui import ui
 
+{%- if use_oauth %}
+# Import OAuth routes to register them
+from {{ project_slug }}.interface.routes import oauth_routes  # noqa: F401
+from {{ project_slug }}.interface.pages import login  # noqa: F401
+{%- if oauth_providers in ['twitter', 'both'] %}
+from {{ project_slug }}.interface.pages import tweets  # noqa: F401
+{%- endif %}
+{%- else %}
 from {{ project_slug }}.interface.pages.home import create_home_page
+{%- endif %}
 
 
 def create_app() -> ui:
@@ -14,7 +23,9 @@ def create_app() -> ui:
     # Configure app settings
     ui.colors(primary="#5898d4")
     
+{%- if not use_oauth %}
     # Create pages
     create_home_page()
+{%- endif %}
     
     return ui

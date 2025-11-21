@@ -1,0 +1,147 @@
+"""OAuth configuration and setup."""
+
+import logging
+import time
+from typing import Optional
+
+from authlib.integrations.starlette_client import OAuth
+from fastapi import Request
+import httpx
+from starlette.responses import RedirectResponse
+
+from nicegui import app
+
+# OAuth Configuration
+# IMPORTANT: Replace these with your actual credentials from:
+{%- if oauth_providers in ['google', 'both'] %}
+# - Google: https://console.cloud.google.com/apis/credentials
+{%- endif %}
+{%- if oauth_providers in ['twitter', 'both'] %}
+# - Twitter: https://developer.twitter.com/en/portal/dashboard
+{%- endif %}
+
+{%- if oauth_providers in ['google', 'both'] %}
+GOOGLE_CLIENT_ID = "YOUR_GOOGLE_CLIENT_ID"
+GOOGLE_CLIENT_SECRET = "YOUR_GOOGLE_CLIENT_SECRET"
+{%- endif %}
+
+{%- if oauth_providers in ['twitter', 'both'] %}
+TWITTER_CLIENT_ID = "YOUR_TWITTER_CLIENT_ID"
+TWITTER_CLIENT_SECRET = "YOUR_TWITTER_CLIENT_SECRET"
+{%- endif %}
+
+# Initialize OAuth
+oauth = OAuth()
+
+{%- if oauth_providers in ['google', 'both'] %}
+
+# Google OAuth 2.0 configuration
+oauth.register(
+    name="google",
+    server_metadata_url="https://accounts.google.com/.well-known/openid-configuration",
+    client_id=GOOGLE_CLIENT_ID,
+    client_secret=GOOGLE_CLIENT_SECRET,
+    client_kwargs={"scope": "openid email profile"},
+)
+{%- endif %}
+
+{%- if oauth_providers in ['twitter', 'both'] %}
+
+# Twitter OAuth 2.0 configuration
+# Note: Twitter requires PKCE (Proof Key for Code Exchange) for OAuth 2.0
+oauth.register(
+    name="twitter",
+    client_id=TWITTER_CLIENT_ID,
+    client_secret=TWITTER_CLIENT_SECRET,
+    api_base_url="https://api.twitter.com/2/",
+    access_token_url="https://api.twitter.com/2/oauth2/token",
+    authorize_url="https://twitter.com/i/oauth2/authorize",
+    redirect_uri="http://localhost:8080/auth/twitter/callback",
+    client_kwargs={
+        "scope": "tweet.read tweet.write users.read offline.access",
+        "code_challenge_method": "S256",  # Required by Twitter OAuth 2.0
+    },
+)
+{%- endif %}
+
+
+def validate_user_info(user_info: dict) -> bool:
+    """Validate user info from OAuth provider.
+    
+    Args:
+        user_info: User information dictionary from OAuth provider
+        
+    Returns:
+        True if user info is valid, False otherwise
+    """
+    try:
+        # Check if token is expired
+        if int(user_info.get("exp", 0)) <= int(time.time()):
+            return False
+
+        # Check email verification
+        if str(user_info.get("email_verified")).lower() != "true":
+            return False
+
+        # Validate based on provider
+        aud = user_info.get("aud")
+        iss = user_info.get("iss")
+
+{%- if oauth_providers in ['google', 'both'] %}
+        # Google validation
+        if aud == GOOGLE_CLIENT_ID:
+            return iss in {"https://accounts.google.com", "accounts.google.com"}
+{%- endif %}
+
+{%- if oauth_providers in ['twitter', 'both'] %}
+        # Twitter validation
+        if aud == TWITTER_CLIENT_ID:
+            return iss == "twitter.com"
+{%- endif %}
+
+        return False
+    except Exception:
+        return False
+
+
+async def revoke_oauth_token(
+    token: dict, provider: Optional[str] = None
+) -> None:
+    """Revoke OAuth token on logout.
+    
+    Args:
+        token: OAuth token dictionary
+        provider: OAuth provider name ('google' or 'twitter')
+    """
+    access_token = token.get("access_token") or token.get("id_token")
+    if not access_token:
+        return
+
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+{%- if oauth_providers in ['twitter', 'both'] %}
+            if provider == "twitter":
+                # Revoke Twitter token
+                await client.post(
+                    "https://api.twitter.com/2/oauth2/revoke",
+                    data={
+                        "token": access_token,
+                        "token_type_hint": "access_token",
+                    },
+                    auth=(TWITTER_CLIENT_ID, TWITTER_CLIENT_SECRET),
+                    headers={"content-type": "application/x-www-form-urlencoded"},
+                )
+{%- endif %}
+{%- if oauth_providers in ['google', 'both'] %}
+            {% if oauth_providers == 'both' %}else:{% endif %}
+                # Revoke Google token
+                await client.post(
+                    "https://oauth2.googleapis.com/revoke",
+                    params={"token": access_token},
+                    headers={"content-type": "application/x-www-form-urlencoded"},
+                )
+{%- endif %}
+    except Exception:
+        logging.exception(
+            f"Failed to revoke {provider or 'OAuth'} token (non-fatal)"
+        )

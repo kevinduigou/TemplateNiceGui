@@ -53,6 +53,21 @@ use_github_actions:
   help: Include GitHub Actions CI/CD pipeline?
   default: true
 
+use_oauth:
+  type: bool
+  help: Include OAuth authentication (Google/Twitter)?
+  default: false
+
+oauth_providers:
+  type: str
+  help: Which OAuth providers to include?
+  default: both
+  choices:
+    - google
+    - twitter
+    - both
+  when: "{{ use_oauth }}"
+
 # Exclude patterns
 _exclude:
   - "*.pyc"

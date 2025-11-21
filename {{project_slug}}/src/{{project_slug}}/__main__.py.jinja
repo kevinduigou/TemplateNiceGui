@@ -6,7 +6,15 @@ from {{ project_slug }}.interface.app import create_app
 def main() -> None:
     """Run the NiceGUI application."""
     app = create_app()
+{%- if use_oauth %}
+    # OAuth requires storage_secret for session management
+    app.run(
+        host="localhost",  # Required for OAuth callbacks
+        storage_secret="CHANGE_THIS_TO_A_RANDOM_SECRET_IN_PRODUCTION",
+    )
+{%- else %}
     app.run()
+{%- endif %}
 
 
 if __name__ == "__main__":

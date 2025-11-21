@@ -18,6 +18,15 @@ This project follows clean architecture principles with clear separation of conc
 {%- if use_docker %}
 - Docker and Docker Compose (optional, for containerized deployment)
 {%- endif %}
+{%- if use_oauth %}
+- OAuth credentials:
+{%- if oauth_providers in ['google', 'both'] %}
+  - Google: [Get credentials](https://console.cloud.google.com/apis/credentials)
+{%- endif %}
+{%- if oauth_providers in ['twitter', 'both'] %}
+  - Twitter: [Get credentials](https://developer.twitter.com/en/portal/dashboard)
+{%- endif %}
+{%- endif %}
 
 ## Installation
 
@@ -42,6 +51,43 @@ source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 pip install -e ".[dev]"
 ```
 
+{%- if use_oauth %}
+
+## OAuth Configuration
+
+1. Copy the environment file template:
+```bash
+cp .env.example .env
+```
+
+2. Fill in your OAuth credentials in `.env`:
+{%- if oauth_providers in ['google', 'both'] %}
+
+### Google OAuth Setup
+- Go to [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
+- Create a new OAuth 2.0 Client ID
+- Add `http://localhost:8080` to authorized JavaScript origins
+- Add `http://localhost:8080/auth/google/callback` to authorized redirect URIs
+- Copy the Client ID and Client Secret to your `.env` file
+{%- endif %}
+{%- if oauth_providers in ['twitter', 'both'] %}
+
+### Twitter OAuth Setup
+- Go to [Twitter Developer Portal](https://developer.twitter.com/en/portal/dashboard)
+- Create a new app or use an existing one
+- Enable OAuth 2.0
+- Add `http://localhost:8080/auth/twitter/callback` to callback URLs
+- Copy the Client ID and Client Secret to your `.env` file
+{%- endif %}
+
+3. Generate a random secret for session management:
+```bash
+python -c "import secrets; print(secrets.token_urlsafe(32))"
+```
+Add this to `STORAGE_SECRET` in your `.env` file.
+
+{%- endif %}
+
 ## Running the Application
 
 ```bash
@@ -53,6 +99,10 @@ python -m {{ project_slug }}
 ```
 
 The application will be available at http://localhost:8080
+{%- if use_oauth %}
+
+**Note:** When using OAuth, you must access the application via `http://localhost:8080` (not `127.0.0.1:8080`) for OAuth callbacks to work correctly.
+{%- endif %}
 
 {%- if use_docker %}
 
