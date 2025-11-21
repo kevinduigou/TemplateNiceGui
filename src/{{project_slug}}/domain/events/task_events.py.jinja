@@ -1,0 +1,16 @@
+"""Domain events for task operations.
+
+Events are immutable records of things that have happened in the domain.
+"""
+
+from dataclasses import dataclass
+from typing import final
+
+
+@final
+@dataclass(frozen=True, slots=True)
+class TaskCompleted:
+    """Event raised when a task completes successfully."""
+
+    items_processed: int
+    message: str

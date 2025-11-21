@@ -1,0 +1,218 @@
+"""RQ Client for job management.
+
+This module provides a client for interacting with RQ (Redis Queue) workers.
+It handles job enqueueing, status checking, and metadata retrieval.
+This layer is allowed to use try/except for I/O operations.
+"""
+
+from typing import Any
+
+from redis import Redis
+from result import Err, Ok, Result
+from rq import Queue
+from rq.job import Job
+
+
+class RQClient:
+    """Client for RQ job management."""
+
+    def __init__(self, redis_url: str = "redis://localhost:6379"):
+        """Initialize RQ client and test connection.
+
+        Args:
+            redis_url: Redis connection URL
+        """
+        self._redis_url = redis_url
+        self._redis: Redis | None = None
+        self._queue: Queue | None = None
+        self._connection_status: str = "not_tested"
+        self._connection_error: str | None = None
+
+        # Test connection at startup
+        self._test_connection_at_startup()
+
+    def _test_connection_at_startup(self) -> None:
+        """Test Redis connection at startup and store status."""
+        try:
+            redis_client = Redis.from_url(self._redis_url)
+            redis_client.ping()
+            self._connection_status = "connected"
+            self._connection_error = None
+        except Exception as e:
+            self._connection_status = "failed"
+            self._connection_error = str(e)
+
+    def _ensure_connection(self) -> Result[Queue, str]:
+        """Ensure Redis connection and queue are initialized.
+
+        Returns:
+            Ok(Queue) if successful, Err(str) if failed
+        """
+        try:
+            if self._redis is None:
+                self._redis = Redis.from_url(self._redis_url)
+            if self._queue is None:
+                self._queue = Queue(connection=self._redis)
+            return Ok(self._queue)
+        except Exception as e:
+            return Err(f"Failed to connect to Redis: {str(e)}")
+
+    def enqueue_job(
+        self,
+        func: str,
+        *args: Any,
+        job_timeout: int | None = None,
+        **kwargs: Any
+    ) -> Result[str, str]:
+        """Enqueue a job for execution by RQ worker.
+
+        Args:
+            func: Full path to the function (e.g., "module.function")
+            *args: Positional arguments for the function
+            job_timeout: Job timeout in seconds (default: 180s, None for no timeout)
+            **kwargs: Keyword arguments for the function
+
+        Returns:
+            Ok(job_id) if successful, Err(str) with error message if failed
+        """
+        queue_result = self._ensure_connection()
+        match queue_result:
+            case Ok(queue):
+                try:
+                    job = queue.enqueue(
+                        func,
+                        *args,
+                        job_timeout=job_timeout,
+                        **kwargs
+                    )
+                    return Ok(job.id)
+                except Exception as e:
+                    return Err(f"Failed to enqueue job: {str(e)}")
+            case Err(error):
+                return Err(error)
+
+    def get_job_status(self, job_id: str) -> Result[str, str]:
+        """Get the status of a job.
+
+        Args:
+            job_id: The job ID to check
+
+        Returns:
+            Ok(status) with status string, Err(str) if job not found or error
+        """
+        queue_result = self._ensure_connection()
+        match queue_result:
+            case Ok(queue):
+                try:
+                    job = Job.fetch(job_id, connection=queue.connection)
+                    return Ok(job.get_status())
+                except Exception as e:
+                    return Err(f"Failed to get job status: {str(e)}")
+            case Err(error):
+                return Err(error)
+
+    def get_job_meta(self, job_id: str) -> Result[dict[str, Any], str]:
+        """Get the metadata of a job.
+
+        Args:
+            job_id: The job ID to retrieve metadata for
+
+        Returns:
+            Ok(metadata_dict) if successful, Err(str) if job not found or error
+        """
+        queue_result = self._ensure_connection()
+        match queue_result:
+            case Ok(queue):
+                try:
+                    job = Job.fetch(job_id, connection=queue.connection)
+                    return Ok(job.meta)
+                except Exception as e:
+                    return Err(f"Failed to get job metadata: {str(e)}")
+            case Err(error):
+                return Err(error)
+
+    def get_job_result(self, job_id: str) -> Result[Any, str]:
+        """Get the result of a completed job.
+
+        Args:
+            job_id: The job ID to retrieve result for
+
+        Returns:
+            Ok(result) if job is finished, Err(str) if job not found, not finished, or error
+        """
+        queue_result = self._ensure_connection()
+        match queue_result:
+            case Ok(queue):
+                try:
+                    job = Job.fetch(job_id, connection=queue.connection)
+                    if not job.is_finished:
+                        return Err(f"Job {job_id} is not finished yet")
+                    return Ok(job.result)
+                except Exception as e:
+                    return Err(f"Failed to get job result: {str(e)}")
+            case Err(error):
+                return Err(error)
+
+    def get_connection_status(self) -> str:
+        """Get the current connection status.
+
+        Returns:
+            Connection status: 'connected', 'failed', or 'not_tested'
+        """
+        return self._connection_status
+
+    def get_connection_error(self) -> str | None:
+        """Get the connection error if any.
+
+        Returns:
+            Error message if connection failed, None otherwise
+        """
+        return self._connection_error
+
+    def get_redis_url(self) -> str:
+        """Get the Redis URL.
+
+        Returns:
+            Redis connection URL
+        """
+        return self._redis_url
+
+    def test_connection_now(self) -> Result[str, str]:
+        """Test Redis connection right now and update status.
+
+        Returns:
+            Ok("connected") if successful, Err(error_message) if failed
+        """
+        try:
+            redis_client = Redis.from_url(self._redis_url)
+            redis_client.ping()
+            self._connection_status = "connected"
+            self._connection_error = None
+            return Ok("connected")
+        except Exception as e:
+            self._connection_status = "failed"
+            self._connection_error = str(e)
+            return Err(str(e))
+
+    def get_queue_info(self) -> Result[dict[str, Any], str]:
+        """Get information about the Redis queue.
+
+        Returns:
+            Ok(queue_info) if successful, Err(str) if failed
+        """
+        queue_result = self._ensure_connection()
+        match queue_result:
+            case Ok(queue):
+                try:
+                    info = {
+                        "queue_length": len(queue),
+                        "queue_name": queue.name,
+                        "failed_job_count": queue.failed_job_registry.count,
+                        "started_job_count": queue.started_job_registry.count,
+                        "finished_job_count": queue.finished_job_registry.count,
+                    }
+                    return Ok(info)
+                except Exception as e:
+                    return Err(f"Failed to get queue info: {str(e)}")
+            case Err(error):
+                return Err(error)

@@ -1,0 +1,208 @@
+"""Job Monitor Component for tracking RQ job progress.
+
+This component demonstrates how to:
+- Enqueue long-running jobs
+- Monitor job status and progress
+- Display job metadata in real-time
+- Handle job completion and errors
+"""
+
+from nicegui import ui
+from result import Ok, Err
+
+from {{ project_slug }}.infrastructure.rq_client import RQClient
+from {{ project_slug }}.infrastructure.cache_db import DBRepository
+
+
+class JobMonitorComponent:
+    """Component for monitoring RQ job progress."""
+
+    def __init__(
+        self,
+        rq_client: RQClient,
+        db_repository: DBRepository,
+    ):
+        """Initialize the Job Monitor component.
+
+        Args:
+            rq_client: RQ client for job management
+            db_repository: Database repository
+        """
+        self._rq_client = rq_client
+        self._db_repository = db_repository
+        self._job_id: str | None = None
+        self._timer: ui.timer | None = None
+
+        # UI component references
+        self._status_label: ui.label | None = None
+        self._progress_bar: ui.linear_progress | None = None
+        self._progress_label: ui.label | None = None
+        self._events_log: ui.log | None = None
+        self._start_button: ui.button | None = None
+        self._cancel_button: ui.button | None = None
+
+    def render(self, container: ui.column) -> None:
+        """Render the Job Monitor component.
+
+        Args:
+            container: The UI container to render the component in
+        """
+        with container:
+            with ui.card().classes("w-full"):
+                ui.label("Long-Running Task Monitor").classes("text-h6 q-mb-md")
+
+                # Control buttons
+                with ui.row().classes("gap-2 q-mb-md"):
+                    self._start_button = ui.button(
+                        "Start Task",
+                        on_click=self._start_job,
+                        icon="play_arrow",
+                    ).classes("bg-primary")
+
+                    self._cancel_button = ui.button(
+                        "Cancel Task",
+                        on_click=self._cancel_job,
+                        icon="stop",
+                    ).classes("bg-negative")
+                    self._cancel_button.visible = False
+
+                # Status display
+                with ui.row().classes("items-center gap-2 q-mb-md"):
+                    ui.label("Status:").classes("text-subtitle2")
+                    self._status_label = ui.label("Not started").classes("text-body1")
+
+                # Progress bar
+                self._progress_bar = ui.linear_progress(value=0).classes("w-full")
+                self._progress_label = ui.label("0%").classes("text-caption q-mb-md")
+
+                # Events log
+                ui.label("Job Events:").classes("text-subtitle2 q-mb-sm")
+                self._events_log = ui.log(max_lines=20).classes("w-full h-48")
+
+    async def _start_job(self) -> None:
+        """Start a long-running job."""
+        # Get database URL
+        db_url = self._db_repository.get_db_url()
+
+        # Enqueue the job
+        result = self._rq_client.enqueue_job(
+            "{{ project_slug }}.application.commands_async.example_long_task.execute_example_long_task_job",
+            db_url,
+            100,  # total_items
+            job_timeout=7200,  # 2 hours timeout
+        )
+
+        match result:
+            case Ok(job_id):
+                self._job_id = job_id
+                ui.notify(f"Job started: {job_id[:8]}...", type="positive")
+
+                # Update UI
+                if self._start_button:
+                    self._start_button.visible = False
+                if self._cancel_button:
+                    self._cancel_button.visible = True
+                if self._events_log:
+                    self._events_log.clear()
+                    self._events_log.push(f"Job started: {job_id}")
+
+                # Start monitoring timer
+                self._start_monitoring()
+
+            case Err(error):
+                ui.notify(f"Failed to start job: {error}", type="negative")
+
+    def _start_monitoring(self) -> None:
+        """Start monitoring the job progress."""
+        if self._timer:
+            self._timer.cancel()
+
+        # Create a timer that checks job status every second
+        self._timer = ui.timer(1.0, self._check_job_status)
+
+    async def _check_job_status(self) -> None:
+        """Check the current job status and update UI."""
+        if not self._job_id:
+            return
+
+        # Get job status
+        status_result = self._rq_client.get_job_status(self._job_id)
+        match status_result:
+            case Ok(status):
+                if self._status_label:
+                    self._status_label.text = status
+
+                # Get job metadata
+                meta_result = self._rq_client.get_job_meta(self._job_id)
+                match meta_result:
+                    case Ok(metadata):
+                        # Update progress bar
+                        progress = metadata.get("progress", 0)
+                        if self._progress_bar:
+                            self._progress_bar.value = progress / 100
+                        if self._progress_label:
+                            current = metadata.get("current_item", 0)
+                            total = metadata.get("total", 0)
+                            self._progress_label.text = (
+                                f"{progress}% ({current}/{total} items)"
+                            )
+
+                        # Update events log
+                        events = metadata.get("events", [])
+                        if self._events_log and events:
+                            # Only add new events
+                            current_lines = len(self._events_log)
+                            for event in events[current_lines:]:
+                                self._events_log.push(event)
+
+                    case Err(_):
+                        pass
+
+                # Check if job is finished
+                if status in ["finished", "failed", "canceled"]:
+                    self._stop_monitoring()
+
+                    if status == "finished":
+                        ui.notify("Job completed successfully!", type="positive")
+                    elif status == "failed":
+                        ui.notify("Job failed", type="negative")
+                    elif status == "canceled":
+                        ui.notify("Job was canceled", type="warning")
+
+                    # Reset UI
+                    if self._start_button:
+                        self._start_button.visible = True
+                    if self._cancel_button:
+                        self._cancel_button.visible = False
+
+            case Err(error):
+                ui.notify(f"Error checking job status: {error}", type="negative")
+                self._stop_monitoring()
+
+    def _stop_monitoring(self) -> None:
+        """Stop monitoring the job."""
+        if self._timer:
+            self._timer.cancel()
+            self._timer = None
+
+    async def _cancel_job(self) -> None:
+        """Cancel the current job."""
+        if not self._job_id:
+            return
+
+        result = self._rq_client.cancel_job(self._job_id)
+        match result:
+            case Ok(_):
+                ui.notify("Job canceled", type="info")
+                self._stop_monitoring()
+
+                # Reset UI
+                if self._start_button:
+                    self._start_button.visible = True
+                if self._cancel_button:
+                    self._cancel_button.visible = False
+                if self._status_label:
+                    self._status_label.text = "Canceled"
+
+            case Err(error):
+                ui.notify(f"Failed to cancel job: {error}", type="negative")

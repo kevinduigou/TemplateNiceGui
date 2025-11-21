@@ -1,0 +1,392 @@
+{% raw %}# RQ Worker Integration Guide
+
+This module provides RQ (Redis Queue) integration for handling long-running background tasks in {{ project_name }}.
+
+## Overview
+
+RQ workers allow you to:
+- Execute long-running tasks asynchronously
+- Track job progress in real-time
+- Monitor job status and metadata
+- Handle job failures gracefully
+- Scale horizontally by adding more workers
+
+## Architecture
+
+```
+┌─────────────┐         ┌─────────────┐         ┌─────────────┐
+│   NiceGUI   │ enqueue │  Redis      │  fetch  │ RQ Worker   │
+│   Frontend  ├────────>│  Queue      │<────────┤  Process    │
+│             │         │             │         │             │
+└──────┬──────┘         └─────────────┘         └──────┬──────┘
+       │                                                │
+       │ poll status/metadata                          │
+       │<───────────────────────────────────────────────┘
+       │                                                │
+       └────────────────────────────────────────────────┘
+                    update job.meta
+```
+
+## Components
+
+### 1. RQ Client (`rq_client.py`)
+Infrastructure layer component for job management:
+- Enqueue jobs
+- Check job status
+- Retrieve job metadata
+- Cancel jobs
+
+### 2. Async Commands (`application/commands_async/`)
+Long-running use cases executed by workers:
+- Must be importable functions
+- Receive serializable parameters
+- Update job metadata for progress tracking
+- Return domain events
+
+### 3. Job Monitor Component (`interface/components/job_monitor_component.py`)
+NiceGUI component for real-time job monitoring:
+- Start/cancel jobs
+- Display progress bars
+- Show event logs
+- Handle job completion
+
+## Usage
+
+### Creating a Long-Running Task
+
+1. **Define the use case** in `application/commands_async/`:
+
+```python
+from rq import get_current_job
+from rq.job import Job
+from result import Ok, Err, Result
+
+def _log_and_track(message: str, job: Job | None = None) -> None:
+    """Helper to log and update job metadata."""
+    logger.info(message)
+    if job is not None:
+        job.meta["events"].append(message)
+        job.save_meta()
+
+class MyLongTaskUseCase:
+    def execute(self, total_items: int, job: Job | None = None) -> Result[TaskCompleted, str]:
+        _log_and_track("Starting task", job)
+        
+        # Initialize progress
+        if job is not None:
+            job.meta["progress"] = 0
+            job.meta["total"] = total_items
+            job.save_meta()
+        
+        # Process items
+        for i in range(total_items):
+            # Do work...
+            
+            # Update progress
+            if job is not None:
+                progress = int((i + 1) / total_items * 100)
+                job.meta["progress"] = progress
+                job.meta["current_item"] = i + 1
+                job.save_meta()
+            
+            if i % 10 == 0:
+                _log_and_track(f"Processed {i}/{total_items}", job)
+        
+        return Ok(TaskCompleted(items_processed=total_items))
+
+# RQ entry point
+def execute_my_long_task_job(db_url: str, total_items: int) -> TaskCompleted:
+    job = get_current_job()
+    if job is not None:
+        job.meta["events"] = []
+        job.meta["status"] = "running"
+        job.save_meta()
+    
+    db_repo = DBRepository(db_url=db_url)
+    use_case = MyLongTaskUseCase(db_repo)
+    
+    result = use_case.execute(total_items, job)
+    
+    match result:
+        case Ok(event):
+            if job is not None:
+                job.meta["status"] = "completed"
+                job.save_meta()
+            return event
+        case Err(error):
+            if job is not None:
+                job.meta["status"] = "failed"
+                job.meta["events"].append(f"Error: {error}")
+                job.save_meta()
+            return TaskCompleted(items_processed=0, message=f"Failed: {error}")
+```
+
+2. **Enqueue the job** from your UI:
+
+```python
+from {{ project_slug }}.infrastructure.rq_client import RQClient
+from {{ project_slug }}.infrastructure.cache_db import DBRepository
+
+db_repo = DBRepository()
+rq_client = RQClient()
+
+result = rq_client.enqueue_job(
+    "{{ project_slug }}.application.commands_async.my_task.execute_my_long_task_job",
+    db_repo.get_db_url(),
+    100,  # total_items
+    job_timeout=7200,  # 2 hours
+)
+
+match result:
+    case Ok(job_id):
+        print(f"Job started: {job_id}")
+    case Err(error):
+        print(f"Failed to start job: {error}")
+```
+
+3. **Monitor job progress**:
+
+```python
+# Check status
+status_result = rq_client.get_job_status(job_id)
+
+# Get metadata
+meta_result = rq_client.get_job_meta(job_id)
+match meta_result:
+    case Ok(metadata):
+        progress = metadata.get("progress", 0)
+        events = metadata.get("events", [])
+        print(f"Progress: {progress}%")
+        for event in events:
+            print(f"  - {event}")
+```
+
+## Job Metadata Structure
+
+Standard metadata fields used for progress tracking:
+
+```python
+{
+    "events": [],           # List of event messages
+    "status": "running",    # Job status: running, completed, failed
+    "progress": 0,          # Progress percentage (0-100)
+    "total": 100,          # Total items to process
+    "current_item": 0,     # Current item being processed
+}
+```
+
+You can add custom fields as needed:
+
+```python
+job.meta["custom_field"] = "custom_value"
+job.meta["processed_ids"] = [1, 2, 3]
+job.save_meta()
+```
+
+## UI Integration with NiceGUI
+
+### Using the Job Monitor Component
+
+```python
+from {{ project_slug }}.interface.components.job_monitor_component import JobMonitorComponent
+from {{ project_slug }}.infrastructure.rq_client import RQClient
+from {{ project_slug }}.infrastructure.cache_db import DBRepository
+
+# In your page
+@ui.page('/jobs')
+def jobs_page():
+    db_repo = DBRepository()
+    rq_client = RQClient()
+    
+    with ui.column().classes('w-full'):
+        monitor = JobMonitorComponent(rq_client, db_repo)
+        monitor.render(ui.column())
+```
+
+### Custom Progress Monitoring
+
+```python
+from nicegui import ui
+
+class MyComponent:
+    def __init__(self, rq_client: RQClient):
+        self._rq_client = rq_client
+        self._job_id: str | None = None
+        self._timer: ui.timer | None = None
+    
+    async def start_job(self):
+        result = self._rq_client.enqueue_job(...)
+        match result:
+            case Ok(job_id):
+                self._job_id = job_id
+                self._start_monitoring()
+    
+    def _start_monitoring(self):
+        self._timer = ui.timer(1.0, self._check_progress)
+    
+    async def _check_progress(self):
+        if not self._job_id:
+            return
+        
+        status_result = self._rq_client.get_job_status(self._job_id)
+        meta_result = self._rq_client.get_job_meta(self._job_id)
+        
+        match (status_result, meta_result):
+            case (Ok(status), Ok(metadata)):
+                progress = metadata.get("progress", 0)
+                # Update UI...
+                
+                if status in ["finished", "failed", "canceled"]:
+                    self._timer.cancel()
+```
+
+## Best Practices
+
+### 1. Avoid Serialization Issues
+Create repository instances **inside** the job function:
+
+```python
+# ✅ Good
+def execute_job(db_url: str):
+    db_repo = DBRepository(db_url=db_url)
+    # Use db_repo...
+
+# ❌ Bad - repository can't be serialized
+def execute_job(db_repo: DBRepository):
+    # This will fail!
+```
+
+### 2. Update Progress Regularly
+Update job metadata at meaningful intervals:
+
+```python
+for i, item in enumerate(items):
+    process(item)
+    
+    # Update every 10 items or at completion
+    if i % 10 == 0 or i == len(items) - 1:
+        job.meta["progress"] = int((i + 1) / len(items) * 100)
+        job.save_meta()
+```
+
+### 3. Handle Errors Gracefully
+Always use Result types and update job metadata on errors:
+
+```python
+result = risky_operation()
+match result:
+    case Ok(value):
+        _log_and_track(f"Success: {value}", job)
+    case Err(error):
+        _log_and_track(f"Error: {error}", job)
+        if job:
+            job.meta["status"] = "failed"
+            job.save_meta()
+        return Err(error)
+```
+
+### 4. Set Appropriate Timeouts
+Configure job timeouts based on expected duration:
+
+```python
+# Short task (5 minutes)
+rq_client.enqueue_job(func, timeout=300)
+
+# Long task (2 hours)
+rq_client.enqueue_job(func, timeout=7200)
+
+# Very long task (24 hours)
+rq_client.enqueue_job(func, timeout=86400)
+```
+
+### 5. Clean Up Resources
+Always clean up resources in finally blocks:
+
+```python
+def execute_job(db_url: str):
+    db_repo = DBRepository(db_url=db_url)
+    external_client = None
+    
+    try:
+        external_client = ExternalClient()
+        # Do work...
+    finally:
+        if external_client:
+            external_client.close()
+```
+
+## Testing
+
+### Unit Testing Jobs
+
+```python
+import pytest
+from {{ project_slug }}.infrastructure.cache_db import DBRepository
+
+def test_long_task():
+    db_repo = DBRepository(db_url="sqlite:///:memory:")
+    use_case = MyLongTaskUseCase(db_repo)
+    
+    # Execute without job tracking
+    result = use_case.execute(total_items=10, job=None)
+    
+    assert result.is_ok()
+```
+
+### Integration Testing with RQ
+
+```python
+from rq import Queue
+from redis import Redis
+
+@pytest.fixture
+def rq_queue():
+    redis_conn = Redis()
+    return Queue(connection=redis_conn)
+
+def test_job_execution(rq_queue):
+    job = rq_queue.enqueue(
+        "{{ project_slug }}.application.commands_async.my_task.execute_my_long_task_job",
+        "sqlite:///:memory:",
+        10,
+    )
+    
+    # Wait for job to complete
+    job.refresh()
+    assert job.is_finished
+    assert job.result.items_processed == 10
+```
+
+## Troubleshooting
+
+### Job Not Starting
+- Check Redis connection: `redis-cli ping`
+- Verify worker is running: `docker-compose ps worker`
+- Check worker logs: `docker-compose logs worker`
+
+### Job Stuck
+- Check job timeout settings
+- Look for exceptions in worker logs
+- Verify job function is importable
+
+### Progress Not Updating
+- Ensure `job.save_meta()` is called after updating metadata
+- Check polling interval in UI (should be ~1 second)
+- Verify job ID is correct
+
+### Memory Issues
+- Process items in batches
+- Clear processed data from memory
+- Consider using pagination for large datasets
+
+## Example: Complete Workflow
+
+See `example_long_task.py` for a complete working example that demonstrates:
+- Progress tracking with metadata
+- Event logging
+- Error handling
+- Result types
+- UI integration
+
+The example can be tested by running the Job Monitor component in your application.
+{% endraw %}

@@ -1,0 +1,11 @@
+"""Domain events module.
+
+Events are immutable records of things that have happened in the domain.
+They are used to communicate between different parts of the system.
+"""
+
+from {{ project_slug }}.domain.events.task_events import TaskCompleted
+
+__all__ = [
+    "TaskCompleted",
+]

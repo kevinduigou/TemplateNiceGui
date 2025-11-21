@@ -191,3 +191,44 @@ data/{{ project_slug }}.db
 ```
 
 This directory is automatically created and is excluded from git (see `.gitignore`).
+
+{%- if use_rq_worker %}
+
+## Using with RQ Workers
+
+When using the database with RQ workers for long-running tasks, pass the database URL to the job function:
+
+```python
+from {{ project_slug }}.infrastructure.rq_client import RQClient
+from {{ project_slug }}.infrastructure.cache_db import DBRepository
+
+# In your UI or application code
+db_repo = DBRepository()
+rq_client = RQClient()
+
+# Enqueue a job that needs database access
+result = rq_client.enqueue_job(
+    "{{ project_slug }}.application.commands_async.example_long_task.execute_example_long_task_job",
+    db_repo.get_db_url(),  # Pass database URL
+    100,  # other parameters
+    job_timeout=7200,
+)
+```
+
+In your async command:
+
+```python
+from {{ project_slug }}.infrastructure.cache_db import DBRepository
+
+def execute_my_job(db_url: str, other_params):
+    # Create repository instance within the job
+    db_repo = DBRepository(db_url=db_url)
+    
+    # Use the repository
+    result = db_repo.save_example("id", "name")
+    # ...
+```
+
+This pattern avoids serialization issues by creating the repository instance within the worker process.
+
+{%- endif %}
