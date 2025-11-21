@@ -1,0 +1,41 @@
+ARG PROJECT_NAME={{ project_slug }}
+
+# These images are generated from the initializeCommand script ".devcontainer/initialize_devcontainer.sh"
+FROM ${PROJECT_NAME}:base
+
+ARG PROJECT_NAME
+# USERNAME is passed from docker-compose build args and matches the local user
+ARG USERNAME
+
+USER root
+
+# Define pre-commit cache as local -- useful for vscode and ci
+ENV PRE_COMMIT_HOME=.cache/pre-commit
+
+# Add packages needed by vscode devcontainer
+RUN apt-get update \
+ && DEBIAN_FRONTEND=noninteractive apt-get install -y \
+    curl \
+    gcc \
+    g++ \
+    cmake \
+    make \
+    iputils-ping \
+    net-tools \
+    tig \
+    wget \
+    zsh \
+    build-essential \
+    locales \
+ && sed -i 's/^# *en_US.UTF-8/en_US.UTF-8/' /etc/locale.gen \
+ && locale-gen \
+ && apt-get clean \
+ && rm -rf /var/lib/apt/lists/*
+
+# Set locale environment variables
+ENV LANG=en_US.UTF-8
+ENV LC_ALL=en_US.UTF-8
+
+USER ${USERNAME}
+
+CMD ["sh"]

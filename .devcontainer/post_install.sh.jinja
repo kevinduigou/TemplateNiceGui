@@ -1,0 +1,18 @@
+#! /bin/bash
+set -e
+
+# Sync dependencies using uv
+uv sync
+source .venv/bin/activate
+
+# * Install pre-commit automatically
+git --version 2>&1 >/dev/null
+GIT_IS_AVAILABLE=$?
+
+if [ -d .git ]; then
+    pre-commit install
+    # Add explicit error message if we try to git commit from outside devcontainer
+    sed -i 's/Did you forget to activate your virtualenv/\\n\`pre-commit\` hooks have been installed from a vscode devcontainer. It cannot work directly in a terminal. Please use vscode or the command \`git commit --no-verify\`./' .git/hooks/pre-commit
+else
+    echo "$(tput setaf 1)Skipping installing pre-commit because cannot find git repository.$(tput sgr 0)"
+fi

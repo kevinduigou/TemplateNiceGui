@@ -1,0 +1,9 @@
+#! /bin/bash
+set -e
+
+# This file is used to build the docker images needed to start a .devcontainer
+docker build -t {{ project_slug }}:base --target base \
+             --build-arg USERNAME=${USER} \
+             --build-arg USER_UID=$(id -u) \
+             --build-arg USER_GID=$(id -g) \
+             -f docker/Dockerfile .

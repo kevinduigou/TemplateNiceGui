@@ -1,0 +1,32 @@
+ARG PROJECT_NAME={{ project_slug }}
+
+# Production image for running the RQ Worker
+FROM ${PROJECT_NAME}:base
+
+ARG USERNAME=appuser
+ARG PROJECT_WORKDIR=/opt/{{ project_slug }}
+
+USER root
+
+# Ensure the project directory exists and has correct permissions
+RUN mkdir -p ${PROJECT_WORKDIR} \
+ && chown -R ${USERNAME}:${USERNAME} ${PROJECT_WORKDIR}
+
+USER ${USERNAME}
+
+WORKDIR ${PROJECT_WORKDIR}
+
+# Copy project files to install dependencies
+COPY --chown=${USERNAME}:${USERNAME} pyproject.toml uv.lock README.md ./
+
+# Copy application source code (needed for hatchling to build the package)
+COPY --chown=${USERNAME}:${USERNAME} src ./src
+
+# Install production dependencies only (no dev, linting, or typechecking groups)
+RUN uv sync --no-dev
+
+# Create data directory for SQLite database
+RUN mkdir -p data
+
+# Run RQ worker
+CMD ["uv", "run", "rq", "worker", "--url", "redis://redis:6379", "default"]
