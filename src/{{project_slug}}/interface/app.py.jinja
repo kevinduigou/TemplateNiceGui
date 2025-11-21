@@ -1,21 +1,28 @@
 """NiceGUI application setup."""
 
+import os
+
+from dotenv import load_dotenv
 from nicegui import ui
+
+# Load environment variables from .env file
+load_dotenv()
 
 {%- if use_oauth %}
 # Import OAuth routes to register them
-from {{ project_slug }}.interface.routes import oauth_routes  # noqa: F401
-from {{ project_slug }}.interface.pages import login  # noqa: F401
+from {{ project_slug }}.interface.pages import (  # noqa: E402
+    login,  # noqa: F401
 {%- if oauth_providers in ['twitter', 'both'] %}
-from {{ project_slug }}.interface.pages import tweets  # noqa: F401
+    tweets,  # noqa: F401
 {%- endif %}
+)
+from {{ project_slug }}.interface.routes import oauth_routes  # noqa: E402, F401
 {%- else %}
-from {{ project_slug }}.interface.pages.home import create_home_page
+from {{ project_slug }}.interface.pages.home import create_home_page  # noqa: E402
 {%- endif %}
-
 
 ui.run(
-    host='localhost',  # NOTE: this ensures that you can run the app locally, accessing via http://127.0.0.1:8080 is not supported by Google OAuth2
-    storage_secret='random secret goes here',
-    port=8001
+    host="localhost",  # NOTE: this ensures that you can run the app locally, accessing via http://127.0.0.1:8080 is not supported by Google OAuth2
+    storage_secret=os.getenv("STORAGE_SECRET", "random secret goes here"),
+    port=8082,
 )

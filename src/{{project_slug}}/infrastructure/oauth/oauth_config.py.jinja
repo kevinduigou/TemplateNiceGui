@@ -21,13 +21,13 @@ from nicegui import app
 {%- endif %}
 
 {%- if oauth_providers in ['google', 'both'] %}
-GOOGLE_CLIENT_ID = "YOUR_GOOGLE_CLIENT_ID"
-GOOGLE_CLIENT_SECRET = "YOUR_GOOGLE_CLIENT_SECRET"
+GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
+GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
 {%- endif %}
 
 {%- if oauth_providers in ['twitter', 'both'] %}
-TWITTER_CLIENT_ID = "YOUR_TWITTER_CLIENT_ID"
-TWITTER_CLIENT_SECRET = "YOUR_TWITTER_CLIENT_SECRET"
+TWITTER_CLIENT_ID = os.getenv("TWITTER_CLIENT_ID", "")
+TWITTER_CLIENT_SECRET = os.getenv("TWITTER_CLIENT_SECRET", "")
 {%- endif %}
 
 # Initialize OAuth
