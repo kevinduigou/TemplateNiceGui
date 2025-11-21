@@ -1,0 +1,167 @@
+"""Database repository for persistence operations.
+
+This layer is allowed to use try/except for database I/O.
+All database operations return Result types for error handling.
+"""
+
+from datetime import datetime
+from pathlib import Path
+
+from result import Err, Ok, Result
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
+from {{ project_slug }}.infrastructure.cache_db.db_models import Base, ExampleModel
+
+
+class DBRepository:
+    """Repository for database operations.
+    
+    This class handles all database interactions using SQLAlchemy.
+    It follows the infrastructure layer pattern where try/except is allowed.
+    """
+
+    def __init__(self, db_url: str = "sqlite:///data/{{ project_slug }}.db"):
+        """Initialize database repository.
+
+        Args:
+            db_url: SQLite database URL (default: sqlite:///data/{{ project_slug }}.db)
+        """
+        self._db_url = db_url
+
+        # Ensure data directory exists for SQLite
+        if db_url.startswith("sqlite:///"):
+            db_path = db_url.replace("sqlite:///", "")
+            Path(db_path).parent.mkdir(parents=True, exist_ok=True)
+
+        self._engine = create_engine(db_url)
+        self._session_factory = sessionmaker(bind=self._engine)
+
+        # WARNING: create_all() only creates new tables and does not handle schema migrations.
+        # For production use or when modifying existing table schemas, consider implementing
+        # Alembic migrations to safely handle:
+        # - Adding/removing columns to existing tables
+        # - Changing column types or constraints
+        # - Data transformations during schema changes
+        # Current approach only supports: new table creation and initial database setup.
+        Base.metadata.create_all(self._engine)
+
+    def get_db_url(self) -> str:
+        """Get the database URL.
+
+        Returns:
+            Database URL string
+        """
+        return self._db_url
+
+    def example_exists(self, example_id: str) -> Result[bool, str]:
+        """Check if an example record exists in the database.
+
+        Args:
+            example_id: The example ID to check
+
+        Returns:
+            Ok(bool) - True if exists, False otherwise
+            Err(str) if database error
+        """
+        try:
+            with self._session_factory() as session:
+                exists = (
+                    session.query(ExampleModel)
+                    .filter_by(example_id=example_id)
+                    .first()
+                    is not None
+                )
+                return Ok(exists)
+        except Exception as e:
+            return Err(f"Database error: {str(e)}")
+
+    def save_example(
+        self, example_id: str, name: str, description: str | None = None
+    ) -> Result[None, str]:
+        """Save or update an example record.
+
+        Args:
+            example_id: Unique identifier for the example
+            name: Name of the example
+            description: Optional description
+
+        Returns:
+            Ok(None) if successful
+            Err(str) with error message if failed
+        """
+        try:
+            with self._session_factory() as session:
+                now = datetime.now()
+
+                # Upsert: update if exists, create if not
+                existing = session.get(ExampleModel, example_id)
+                if existing:
+                    existing.name = name
+                    existing.description = description
+                    existing.updated_at = now
+                else:
+                    new_example = ExampleModel(
+                        example_id=example_id,
+                        name=name,
+                        description=description,
+                        created_at=now,
+                        updated_at=now,
+                    )
+                    session.add(new_example)
+
+                session.commit()
+                return Ok(None)
+        except Exception as e:
+            return Err(f"Database error: {str(e)}")
+
+    def get_example(self, example_id: str) -> Result[ExampleModel | None, str]:
+        """Get an example record by ID.
+
+        Args:
+            example_id: The example ID to retrieve
+
+        Returns:
+            Ok(ExampleModel | None) - Example model if found, None if not found
+            Err(str) if database error
+        """
+        try:
+            with self._session_factory() as session:
+                model = session.get(ExampleModel, example_id)
+                return Ok(model)
+        except Exception as e:
+            return Err(f"Database error: {str(e)}")
+
+    def list_all_examples(self) -> Result[list[ExampleModel], str]:
+        """List all example records from the database.
+
+        Returns:
+            Ok(list[ExampleModel]) - List of all example models
+            Err(str) if database error
+        """
+        try:
+            with self._session_factory() as session:
+                models = session.query(ExampleModel).all()
+                return Ok(models)
+        except Exception as e:
+            return Err(f"Database error: {str(e)}")
+
+    def delete_example(self, example_id: str) -> Result[None, str]:
+        """Delete an example record by ID.
+
+        Args:
+            example_id: The example ID to delete
+
+        Returns:
+            Ok(None) if successful
+            Err(str) with error message if failed
+        """
+        try:
+            with self._session_factory() as session:
+                model = session.get(ExampleModel, example_id)
+                if model:
+                    session.delete(model)
+                    session.commit()
+                return Ok(None)
+        except Exception as e:
+            return Err(f"Database error: {str(e)}")

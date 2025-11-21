@@ -1,0 +1,14 @@
+"""Cache database module for persistence operations.
+
+This module provides SQLite database support using SQLAlchemy ORM.
+It includes models and repository for database operations.
+"""
+
+from {{ project_slug }}.infrastructure.cache_db.db_models import Base, ExampleModel
+from {{ project_slug }}.infrastructure.cache_db.db_repository import DBRepository
+
+__all__ = [
+    "Base",
+    "DBRepository",
+    "ExampleModel",
+]

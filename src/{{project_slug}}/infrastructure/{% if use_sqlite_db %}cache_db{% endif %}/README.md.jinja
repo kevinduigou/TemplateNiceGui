@@ -1,0 +1,193 @@
+# SQLite Database Module
+
+This module provides SQLite database support using SQLAlchemy ORM for the {{ project_name }} project.
+
+## Overview
+
+The database module follows clean architecture principles:
+
+- **Models** (`db_models.py`): SQLAlchemy ORM models defining the database schema
+- **Repository** (`db_repository.py`): Database operations with Result-based error handling
+- **Infrastructure Layer**: Only layer allowed to use `try/except` for I/O operations
+
+## Features
+
+- ✅ SQLite database with automatic directory creation
+- ✅ SQLAlchemy 2.0+ ORM models
+- ✅ Result-based error handling (no exceptions in domain/application layers)
+- ✅ Automatic table creation on initialization
+- ✅ Type-safe operations with mypy support
+
+## Usage
+
+### Basic Setup
+
+```python
+from {{ project_slug }}.infrastructure.cache_db import DBRepository
+
+# Initialize repository (creates database and tables automatically)
+db_repo = DBRepository()  # Default: sqlite:///data/{{ project_slug }}.db
+
+# Or with custom database URL
+db_repo = DBRepository(db_url="sqlite:///custom/path/mydb.db")
+```
+
+### Example Operations
+
+```python
+from result import Ok, Err
+
+# Save a record
+result = db_repo.save_example(
+    example_id="example-1",
+    name="My Example",
+    description="This is an example record"
+)
+
+match result:
+    case Ok(_):
+        print("Record saved successfully")
+    case Err(error):
+        print(f"Error saving record: {error}")
+
+# Check if record exists
+exists_result = db_repo.example_exists("example-1")
+match exists_result:
+    case Ok(exists):
+        print(f"Record exists: {exists}")
+    case Err(error):
+        print(f"Error checking existence: {error}")
+
+# Get a record
+get_result = db_repo.get_example("example-1")
+match get_result:
+    case Ok(model) if model:
+        print(f"Found: {model.name}")
+    case Ok(None):
+        print("Record not found")
+    case Err(error):
+        print(f"Error retrieving record: {error}")
+
+# List all records
+list_result = db_repo.list_all_examples()
+match list_result:
+    case Ok(models):
+        for model in models:
+            print(f"- {model.name}")
+    case Err(error):
+        print(f"Error listing records: {error}")
+
+# Delete a record
+delete_result = db_repo.delete_example("example-1")
+match delete_result:
+    case Ok(_):
+        print("Record deleted successfully")
+    case Err(error):
+        print(f"Error deleting record: {error}")
+```
+
+## Customizing Models
+
+Replace the `ExampleModel` in `db_models.py` with your own domain models:
+
+```python
+from datetime import datetime
+from typing import Optional
+from sqlalchemy import DateTime, ForeignKey, String
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+class YourModel(Base):
+    """Your custom ORM model."""
+    
+    __tablename__ = "your_table"
+    
+    id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    name: Mapped[str] = mapped_column(String(512), nullable=False)
+    email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+```
+
+## Schema Migrations
+
+⚠️ **Important**: The current implementation uses `Base.metadata.create_all()` which only creates new tables. It does **not** handle schema migrations.
+
+For production use or when modifying existing table schemas, consider implementing **Alembic** migrations:
+
+```bash
+# Install Alembic
+uv add alembic
+
+# Initialize Alembic
+alembic init alembic
+
+# Create a migration
+alembic revision --autogenerate -m "Add new column"
+
+# Apply migrations
+alembic upgrade head
+```
+
+## Architecture Guidelines
+
+### Domain Layer
+- Domain objects must **not** depend on SQLAlchemy models
+- Keep domain entities pure and framework-agnostic
+- Use value objects and entities from `domain/` directory
+
+### Application Layer
+- Use the repository in commands and queries
+- Always handle Result types with pattern matching
+- Never let exceptions propagate from infrastructure
+
+### Infrastructure Layer
+- Only layer allowed to use `try/except` around database I/O
+- All operations return `Result[T, str]` types
+- Convert SQLAlchemy models to domain entities when needed
+
+## Example Integration
+
+```python
+# In application/commands/save_data.py
+from result import Result
+from {{ project_slug }}.infrastructure.cache_db import DBRepository
+
+def execute_save_data(
+    db_repo: DBRepository,
+    data_id: str,
+    name: str
+) -> Result[None, str]:
+    """Save data using the database repository."""
+    return db_repo.save_example(
+        example_id=data_id,
+        name=name,
+        description=None
+    )
+```
+
+## Testing
+
+The database module can be tested with in-memory SQLite:
+
+```python
+import pytest
+from {{ project_slug }}.infrastructure.cache_db import DBRepository
+
+@pytest.fixture
+def db_repo():
+    """Create an in-memory database for testing."""
+    return DBRepository(db_url="sqlite:///:memory:")
+
+def test_save_example(db_repo):
+    result = db_repo.save_example("test-1", "Test Name")
+    assert result.is_ok()
+```
+
+## Database Location
+
+By default, the database is stored at:
+```
+data/{{ project_slug }}.db
+```
+
+This directory is automatically created and is excluded from git (see `.gitignore`).

@@ -55,6 +55,11 @@ use_github_actions:
   help: Include GitHub Actions CI/CD pipeline?
   default: true
 
+use_sqlite_db:
+  type: bool
+  help: Include SQLite database support with SQLAlchemy?
+  default: false
+
 use_oauth:
   type: bool
   help: Include OAuth authentication (Google/Twitter)?
@@ -88,6 +93,7 @@ _exclude:
   - "{% if not use_rq_worker %}src/{{ project_slug }}/application/commands_async{% endif %}"
   - "{% if not use_rq_worker %}src/{{ project_slug }}/application/queries_async{% endif %}"
   - "{% if not use_github_actions %}.github{% endif %}"
+  - "{% if not use_sqlite_db %}src/{{ project_slug }}/infrastructure/cache_db{% endif %}"
   - "{% if not use_oauth %}src/{{ project_slug }}/infrastructure/oauth{% endif %}"
   - "{% if not use_oauth %}src/{{ project_slug }}/interface/pages/login.py.jinja{% endif %}"
   - "{% if not use_oauth %}src/{{ project_slug }}/interface/routes/oauth_routes.py.jinja{% endif %}"

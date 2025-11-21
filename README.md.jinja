@@ -216,6 +216,9 @@ uv run pytest --cov={{ project_slug }} --cov-report=html
 │       │   └── queries_async/   # Long-running queries (RQ)
 {%- endif %}
 │       ├── infrastructure/      # External integrations
+{%- if use_sqlite_db %}
+│       │   ├── cache_db/        # SQLite database (SQLAlchemy)
+{%- endif %}
 │       │   ├── database/        # Database access
 │       │   └── external_apis/   # External API clients
 │       └── interface/           # NiceGUI UI
@@ -230,6 +233,63 @@ uv run pytest --cov={{ project_slug }} --cov-report=html
 {%- endif %}
 └── pyproject.toml              # Project configuration
 ```
+
+## Features
+
+{%- if use_sqlite_db %}
+
+### SQLite Database Support
+
+This project includes SQLite database support with SQLAlchemy ORM:
+
+- **Location**: `src/{{ project_slug }}/infrastructure/cache_db/`
+- **Features**:
+  - Automatic table creation on initialization
+  - Result-based error handling (no exceptions)
+  - Type-safe operations with mypy support
+  - Example models and repository included
+
+**Quick Start:**
+
+```python
+from {{ project_slug }}.infrastructure.cache_db import DBRepository
+
+# Initialize repository (creates database automatically)
+db_repo = DBRepository()  # Default: sqlite:///data/{{ project_slug }}.db
+
+# Save a record
+result = db_repo.save_example("id-1", "Example Name", "Description")
+```
+
+See `src/{{ project_slug }}/infrastructure/cache_db/README.md` for detailed documentation.
+
+{%- endif %}
+{%- if use_rq_worker %}
+
+### Background Task Processing
+
+Long-running tasks are handled by RQ workers:
+
+- **Commands**: `src/{{ project_slug }}/application/commands_async/`
+- **Queries**: `src/{{ project_slug }}/application/queries_async/`
+- **Worker**: Configured in `docker/Dockerfile.worker`
+
+{%- endif %}
+{%- if use_oauth %}
+
+### OAuth Authentication
+
+OAuth 2.0 authentication support for:
+{%- if oauth_providers in ['google', 'both'] %}
+- Google
+{%- endif %}
+{%- if oauth_providers in ['twitter', 'both'] %}
+- Twitter
+{%- endif %}
+
+See OAuth Configuration section above for setup instructions.
+
+{%- endif %}
 
 ## Design Principles
 

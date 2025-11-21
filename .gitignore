@@ -64,6 +64,12 @@ venv.bak/
 *.swo
 *~
 
+# Database files
+data/
+*.db
+*.sqlite
+*.sqlite3
+
 # OS
 .DS_Store
 Thumbs.db
