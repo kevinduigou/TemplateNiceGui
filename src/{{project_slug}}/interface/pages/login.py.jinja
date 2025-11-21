@@ -60,4 +60,30 @@ async def main_page(request: Request) -> Optional[RedirectResponse]:
             ).props("color=info")
 {%- endif %}
 
+{%- if use_rq_worker and use_sqlite_db %}
+
+    ui.separator().classes("q-my-lg")
+
+    # Job Monitor Section
+    import os
+    from {{ project_slug }}.infrastructure.rq_client import RQClient
+    from {{ project_slug }}.infrastructure.cache_db import DBRepository
+    from {{ project_slug }}.interface.components.job_monitor_component import JobMonitorComponent
+
+    with ui.column().classes("w-full max-w-4xl"):
+        # Initialize infrastructure dependencies
+        redis_url = os.getenv("REDIS_URL", "redis://localhost:6379")
+        db_url = os.getenv("DATABASE_URL", "sqlite:///data/{{ project_slug }}.db")
+
+        rq_client = RQClient(redis_url=redis_url)
+        db_repository = DBRepository(db_url=db_url)
+
+        # Create and render job monitor component
+        job_monitor = JobMonitorComponent(
+            rq_client=rq_client,
+            db_repository=db_repository,
+        )
+        job_monitor.render(ui.column().classes("w-full"))
+{%- endif %}
+
     return None

@@ -194,6 +194,27 @@ class RQClient:
             self._connection_error = str(e)
             return Err(str(e))
 
+    def cancel_job(self, job_id: str) -> Result[None, str]:
+        """Cancel a running or queued job.
+
+        Args:
+            job_id: The job ID to cancel
+
+        Returns:
+            Ok(None) if successful, Err(str) if job not found or error
+        """
+        queue_result = self._ensure_connection()
+        match queue_result:
+            case Ok(queue):
+                try:
+                    job = Job.fetch(job_id, connection=queue.connection)
+                    job.cancel()
+                    return Ok(None)
+                except Exception as e:
+                    return Err(f"Failed to cancel job: {str(e)}")
+            case Err(error):
+                return Err(error)
+
     def get_queue_info(self) -> Result[dict[str, Any], str]:
         """Get information about the Redis queue.
 
