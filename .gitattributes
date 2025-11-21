@@ -1,0 +1,4 @@
+# Ensure shell scripts have executable permissions
+*.sh text eol=lf
+.devcontainer/initialize_devcontainer.sh.jinja text eol=lf
+.devcontainer/post_install.sh.jinja text eol=lf
