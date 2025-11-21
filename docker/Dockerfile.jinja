@@ -16,8 +16,9 @@ RUN apt-get update && apt-get install -y \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Install uv
-RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+# Download the latest uv installer and install uv
+RUN curl -L https://astral.sh/uv/install.sh -o /tmp/uv-installer.sh \
+    && sh /tmp/uv-installer.sh && rm /tmp/uv-installer.sh
 ENV PATH="/root/.cargo/bin:$PATH"
 
 WORKDIR /app
