@@ -1,0 +1,66 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environments
+.venv
+venv/
+ENV/
+env/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+.tox/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Documentation
+*.md
+docs/
+
+# CI/CD
+.github/
+
+# Development
+.env
+.env.local
+*.log
+
+# Docker
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# Copier
+.copier-answers.yml
+
+# Features (BDD tests - optional, include if needed in container)
+features/
+
+# Tests (optional, include if running tests in container)
+tests/

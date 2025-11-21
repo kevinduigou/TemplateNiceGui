@@ -1,0 +1,68 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      target: production
+    ports:
+      - "8080:8080"
+    environment:
+      - PYTHONUNBUFFERED=1
+{%- if use_oauth %}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+{%- if oauth_providers in ['twitter', 'both'] %}
+      - TWITTER_CLIENT_ID=${TWITTER_CLIENT_ID}
+      - TWITTER_CLIENT_SECRET=${TWITTER_CLIENT_SECRET}
+{%- endif %}
+      - STORAGE_SECRET=${STORAGE_SECRET}
+    env_file:
+      - .env
+{%- endif %}
+{%- if use_rq_worker %}
+    depends_on:
+      - redis
+{%- endif %}
+    volumes:
+      - ./src:/app/src:ro
+    restart: unless-stopped
+    networks:
+      - {{ project_slug }}_network
+
+{%- if use_rq_worker %}
+
+  worker:
+    build:
+      context: .
+      target: worker
+    environment:
+      - PYTHONUNBUFFERED=1
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - redis
+    volumes:
+      - ./src:/app/src:ro
+    restart: unless-stopped
+    networks:
+      - {{ project_slug }}_network
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    networks:
+      - {{ project_slug }}_network
+{%- endif %}
+
+networks:
+  {{ project_slug }}_network:
+    driver: bridge
+
+{%- if use_rq_worker %}
+volumes:
+  redis_data:
+{%- endif %}

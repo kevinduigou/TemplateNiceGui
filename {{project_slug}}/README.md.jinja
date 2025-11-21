@@ -108,6 +108,8 @@ The application will be available at http://localhost:8080
 
 ## Docker Deployment
 
+### Production Deployment
+
 ```bash
 # Build and run with Docker Compose
 docker-compose up --build
@@ -118,6 +120,49 @@ docker-compose up -d
 # Stop services
 docker-compose down
 ```
+
+The application will be available at http://localhost:8080
+
+### VS Code Dev Container
+
+This project includes a complete VS Code Dev Container configuration for a consistent development environment.
+
+**Features:**
+- Pre-configured Python environment with all dependencies
+- Automatic installation of recommended VS Code extensions
+- Ruff, mypy, and pytest pre-configured
+- Format on save enabled
+{%- if use_rq_worker %}
+- Redis service automatically started
+{%- endif %}
+
+**To use:**
+1. Install [Docker](https://www.docker.com/products/docker-desktop) and [VS Code](https://code.visualstudio.com/)
+2. Install the [Dev Containers extension](https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers)
+3. Open the project in VS Code
+4. Click "Reopen in Container" when prompted (or use Command Palette: "Dev Containers: Reopen in Container")
+
+The dev container uses the `dev-base` stage from the Dockerfile, which includes:
+- All development tools (vim, nano, build-essential)
+- Non-root user (vscode) with sudo access
+- Automatic dependency installation via `uv sync --all-extras`
+
+### Docker Architecture
+
+The Dockerfile uses multi-stage builds for efficiency:
+
+- **base**: Common base with Python and uv
+- **dev-base**: Development environment (used by devcontainer)
+- **dependencies**: Installs Python packages
+- **production**: Minimal production image
+{%- if use_rq_worker %}
+- **worker**: RQ worker for background tasks
+{%- endif %}
+
+This approach:
+- Shares the base image between development and production
+- Keeps production images small
+- Enables fast rebuilds during development
 {%- endif %}
 
 ## Development
