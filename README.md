@@ -26,8 +26,8 @@ A [Copier](https://copier.readthedocs.io/) template for creating NiceGUI applica
 ### Create a New Project
 
 ```bash
-# Using copier
-copier copy gh:yourusername/copier-nicegui-template my-project
+# Using copier from GitHub
+copier copy gh:kevinduigou/TemplateNiceGui my-project
 
 # Or from local path
 copier copy path/to/this/template my-project
