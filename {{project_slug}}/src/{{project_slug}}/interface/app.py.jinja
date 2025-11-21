@@ -1,0 +1,20 @@
+"""NiceGUI application setup."""
+
+from nicegui import ui
+
+from {{ project_slug }}.interface.pages.home import create_home_page
+
+
+def create_app() -> ui:
+    """Create and configure the NiceGUI application.
+    
+    Returns:
+        Configured NiceGUI ui instance
+    """
+    # Configure app settings
+    ui.colors(primary="#5898d4")
+    
+    # Create pages
+    create_home_page()
+    
+    return ui

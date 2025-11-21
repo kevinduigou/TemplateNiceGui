@@ -1,0 +1,27 @@
+Feature: User Creation
+  As a user of the system
+  I want to create new users
+  So that they can access the application
+
+  Scenario: Create user with valid email
+    Given I have a username "testuser"
+    And I have an email "test@example.com"
+    When I create a user
+    Then the user should be created successfully
+    And the user should have username "testuser"
+    And the user should have email "test@example.com"
+    And the user should be active
+
+  Scenario: Create user with invalid email
+    Given I have a username "testuser"
+    And I have an email "invalid-email"
+    When I create a user
+    Then the user creation should fail
+    And I should see an error message containing "Invalid email"
+
+  Scenario: Create user with empty email
+    Given I have a username "testuser"
+    And I have an email ""
+    When I create a user
+    Then the user creation should fail
+    And I should see an error message containing "Email cannot be empty"

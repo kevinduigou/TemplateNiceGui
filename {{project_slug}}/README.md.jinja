@@ -1,0 +1,165 @@
+# {{ project_name }}
+
+{{ project_description }}
+
+## Architecture
+
+This project follows clean architecture principles with clear separation of concerns:
+
+- **Domain Layer** (`src/{{ project_slug }}/domain/`): Core business logic, immutable and pure
+- **Application Layer** (`src/{{ project_slug }}/application/`): Use cases and orchestration
+- **Infrastructure Layer** (`src/{{ project_slug }}/infrastructure/`): External integrations (DB, APIs, I/O)
+- **Interface Layer** (`src/{{ project_slug }}/interface/`): NiceGUI frontend
+
+## Prerequisites
+
+- Python {{ python_version }}+
+- [uv](https://docs.astral.sh/uv/) (recommended) or pip
+{%- if use_docker %}
+- Docker and Docker Compose (optional, for containerized deployment)
+{%- endif %}
+
+## Installation
+
+### Using uv (recommended)
+
+```bash
+# Install dependencies
+uv sync
+
+# Install with dev dependencies
+uv sync --all-extras
+```
+
+### Using pip
+
+```bash
+# Create virtual environment
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# Install dependencies
+pip install -e ".[dev]"
+```
+
+## Running the Application
+
+```bash
+# Using uv
+uv run python -m {{ project_slug }}
+
+# Using pip
+python -m {{ project_slug }}
+```
+
+The application will be available at http://localhost:8080
+
+{%- if use_docker %}
+
+## Docker Deployment
+
+```bash
+# Build and run with Docker Compose
+docker-compose up --build
+
+# Run in detached mode
+docker-compose up -d
+
+# Stop services
+docker-compose down
+```
+{%- endif %}
+
+## Development
+
+### Code Quality
+
+Run all quality checks before committing:
+
+```bash
+# Run tests
+uv run pytest
+
+# Check code quality
+uv run ruff check
+
+# Type checking
+uv run mypy src/{{ project_slug }}
+
+# Format code (do this last)
+uv run ruff format
+```
+
+### Running Tests
+
+```bash
+# Unit tests
+uv run pytest tests/unit/
+
+# Integration tests
+uv run behave
+
+# With coverage
+uv run pytest --cov={{ project_slug }} --cov-report=html
+```
+
+## Project Structure
+
+```
+{{ project_slug }}/
+├── src/
+│   └── {{ project_slug }}/
+│       ├── domain/              # Core business logic
+│       │   ├── entities/        # Mutable domain objects
+│       │   ├── value_objects/   # Immutable domain objects
+│       │   └── events/          # Domain events
+│       ├── application/         # Use cases
+│       │   ├── commands/        # State-changing operations
+│       │   ├── queries/         # Read-only operations
+{%- if use_rq_worker %}
+│       │   ├── commands_async/  # Long-running commands (RQ)
+│       │   └── queries_async/   # Long-running queries (RQ)
+{%- endif %}
+│       ├── infrastructure/      # External integrations
+│       │   ├── database/        # Database access
+│       │   └── external_apis/   # External API clients
+│       └── interface/           # NiceGUI UI
+│           ├── pages/           # UI pages
+│           └── components/      # Reusable UI components
+├── tests/
+│   ├── unit/                    # Unit tests
+│   └── integration/             # Integration tests
+├── features/                    # BDD tests (behave)
+{%- if use_docker %}
+├── docker/                      # Docker configuration
+{%- endif %}
+└── pyproject.toml              # Project configuration
+```
+
+## Design Principles
+
+### Immutability First
+- All function parameters are immutable by default
+- Use `@dataclass(frozen=True)` for value objects
+- Entities are mutable, but modifications are explicit
+
+### Rust-Style Error Handling
+- No exceptions in domain/application layers
+- Use `Result[T, E]` from the `result` library
+- Only infrastructure layer uses try/except for I/O
+
+### Explicit Over Implicit
+- No magic numbers or dynamic behavior
+- Clear, descriptive variable and function names
+- No single-letter variables
+
+## Contributing
+
+1. Follow the architecture guidelines in `.clinerules/Agents.md`
+2. Write tests for new features
+3. Run quality checks before committing
+4. Keep domain layer pure (no external dependencies)
+
+## License
+
+[Your License Here]

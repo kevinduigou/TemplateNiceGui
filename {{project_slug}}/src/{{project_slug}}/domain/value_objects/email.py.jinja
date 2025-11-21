@@ -1,0 +1,55 @@
+"""Email value object - example immutable domain object with validation."""
+
+from dataclasses import dataclass
+from typing import final
+
+from result import Err, Ok, Result
+
+
+@final
+@dataclass(frozen=True, slots=True)
+class Email:
+    """Email value object with validation.
+    
+    Value objects are immutable and defined by their values, not identity.
+    They should validate their invariants at creation time.
+    """
+
+    value: str
+
+    @staticmethod
+    def try_create(email_string: str) -> Result["Email", str]:
+        """Create an Email value object with validation.
+        
+        Args:
+            email_string: The email address string to validate
+            
+        Returns:
+            Result containing either a valid Email or an error message
+        """
+        if not email_string:
+            return Err("Email cannot be empty")
+        
+        if "@" not in email_string:
+            return Err("Email must contain @ symbol")
+        
+        parts = email_string.split("@")
+        if len(parts) != 2:
+            return Err("Email must contain exactly one @ symbol")
+        
+        local_part, domain_part = parts
+        
+        if not local_part:
+            return Err("Email local part cannot be empty")
+        
+        if not domain_part:
+            return Err("Email domain part cannot be empty")
+        
+        if "." not in domain_part:
+            return Err("Email domain must contain at least one dot")
+        
+        return Ok(Email(value=email_string.lower()))
+
+    def __str__(self) -> str:
+        """Return string representation of the email."""
+        return self.value

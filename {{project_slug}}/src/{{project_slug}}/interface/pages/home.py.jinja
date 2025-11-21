@@ -1,0 +1,81 @@
+"""Home page for the NiceGUI application."""
+
+from nicegui import ui
+from result import Err, Ok
+
+from {{ project_slug }}.application.commands.create_user import (
+    CreateUserCommand,
+    execute_create_user,
+)
+
+
+def create_home_page() -> None:
+    """Create the home page with user creation form."""
+
+    @ui.page("/")
+    def home() -> None:
+        """Render the home page."""
+        ui.label("{{ project_name }}").classes("text-h3")
+        ui.label("{{ project_description }}").classes("text-subtitle1")
+
+        ui.separator()
+
+        with ui.card().classes("w-full max-w-md"):
+            ui.label("Create User").classes("text-h5")
+
+            username_input = ui.input(
+                label="Username",
+                placeholder="Enter username",
+            ).classes("w-full")
+
+            email_input = ui.input(
+                label="Email",
+                placeholder="Enter email address",
+            ).classes("w-full")
+
+            result_label = ui.label("").classes("text-body1")
+
+            def handle_create_user() -> None:
+                """Handle user creation button click."""
+                username = username_input.value
+                email = email_input.value
+
+                if not username or not email:
+                    result_label.text = "Please fill in all fields"
+                    result_label.classes("text-red-500")
+                    return
+
+                # Execute command
+                command = CreateUserCommand(
+                    username=username,
+                    email_string=email,
+                )
+                result = execute_create_user(command)
+
+                # Handle result
+                match result:
+                    case Ok(user):
+                        result_label.text = (
+                            f"User created successfully! "
+                            f"ID: {user.user_id}, Email: {user.email}"
+                        )
+                        result_label.classes("text-green-500", remove="text-red-500")
+                        username_input.value = ""
+                        email_input.value = ""
+                    case Err(error_message):
+                        result_label.text = f"Error: {error_message}"
+                        result_label.classes("text-red-500", remove="text-green-500")
+
+            ui.button("Create User", on_click=handle_create_user).classes("w-full")
+
+        ui.separator()
+
+        with ui.card().classes("w-full max-w-md"):
+            ui.label("Architecture").classes("text-h6")
+            ui.label("This application demonstrates clean architecture:").classes(
+                "text-body2"
+            )
+            ui.label("• Domain: Pure business logic").classes("text-body2")
+            ui.label("• Application: Use cases and orchestration").classes("text-body2")
+            ui.label("• Infrastructure: External integrations").classes("text-body2")
+            ui.label("• Interface: NiceGUI frontend").classes("text-body2")

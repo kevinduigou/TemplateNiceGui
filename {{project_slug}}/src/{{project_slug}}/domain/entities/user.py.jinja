@@ -1,0 +1,33 @@
+"""User entity - example mutable domain object."""
+
+from dataclasses import dataclass
+
+
+@dataclass
+class User:
+    """User entity representing a user in the system.
+    
+    Entities are mutable domain objects with identity.
+    They can be modified but should maintain their identity.
+    """
+
+    user_id: str
+    username: str
+    email: str
+    is_active: bool = True
+
+    def deactivate(self) -> None:
+        """Deactivate the user account."""
+        self.is_active = False
+
+    def activate(self) -> None:
+        """Activate the user account."""
+        self.is_active = True
+
+    def update_email(self, new_email: str) -> None:
+        """Update user's email address.
+        
+        Args:
+            new_email: The new email address
+        """
+        self.email = new_email

@@ -1,0 +1,13 @@
+"""Main entry point for {{ project_name }}."""
+
+from {{ project_slug }}.interface.app import create_app
+
+
+def main() -> None:
+    """Run the NiceGUI application."""
+    app = create_app()
+    app.run()
+
+
+if __name__ == "__main__":
+    main()

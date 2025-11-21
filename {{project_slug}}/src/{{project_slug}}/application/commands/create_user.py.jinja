@@ -1,0 +1,54 @@
+"""Create user command - example state-changing use case."""
+
+from dataclasses import dataclass
+from typing import final
+
+from result import Err, Ok, Result
+
+from {{ project_slug }}.domain.entities.user import User
+from {{ project_slug }}.domain.value_objects.email import Email
+
+
+@final
+@dataclass(frozen=True, slots=True)
+class CreateUserCommand:
+    """Command to create a new user.
+    
+    Commands are immutable data structures representing user intentions.
+    """
+
+    username: str
+    email_string: str
+
+
+def execute_create_user(
+    command: CreateUserCommand,
+) -> Result[User, str]:
+    """Execute the create user command.
+    
+    This is a pure function that orchestrates domain logic.
+    No I/O operations are performed here.
+    
+    Args:
+        command: The create user command
+        
+    Returns:
+        Result containing either the created User or an error message
+    """
+    # Validate email using domain value object
+    email_result = Email.try_create(command.email_string)
+    
+    match email_result:
+        case Err(error_message):
+            return Err(f"Invalid email: {error_message}")
+        case Ok(email):
+            # Create user entity
+            # In a real application, you would generate a unique ID
+            # and persist the user through infrastructure layer
+            user = User(
+                user_id=f"user_{command.username}",
+                username=command.username,
+                email=email.value,
+                is_active=True,
+            )
+            return Ok(user)

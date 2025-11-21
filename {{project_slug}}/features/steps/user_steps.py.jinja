@@ -1,0 +1,78 @@
+"""Step definitions for user creation feature."""
+
+from behave import given, then, when
+from result import Err, Ok
+
+from {{ project_slug }}.application.commands.create_user import (
+    CreateUserCommand,
+    execute_create_user,
+)
+
+
+@given('I have a username "{username}"')
+def step_given_username(context, username):
+    """Store username in context."""
+    context.username = username
+
+
+@given('I have an email "{email}"')
+def step_given_email(context, email):
+    """Store email in context."""
+    context.email = email
+
+
+@when("I create a user")
+def step_when_create_user(context):
+    """Execute create user command."""
+    command = CreateUserCommand(
+        username=context.username,
+        email_string=context.email,
+    )
+    context.result = execute_create_user(command)
+
+
+@then("the user should be created successfully")
+def step_then_user_created(context):
+    """Verify user was created successfully."""
+    match context.result:
+        case Ok(user):
+            context.user = user
+        case Err(error):
+            raise AssertionError(f"Expected success but got error: {error}")
+
+
+@then('the user should have username "{expected_username}"')
+def step_then_username(context, expected_username):
+    """Verify user has expected username."""
+    assert context.user.username == expected_username
+
+
+@then('the user should have email "{expected_email}"')
+def step_then_email(context, expected_email):
+    """Verify user has expected email."""
+    assert context.user.email == expected_email
+
+
+@then("the user should be active")
+def step_then_active(context):
+    """Verify user is active."""
+    assert context.user.is_active is True
+
+
+@then("the user creation should fail")
+def step_then_creation_failed(context):
+    """Verify user creation failed."""
+    match context.result:
+        case Ok(_):
+            raise AssertionError("Expected error but got success")
+        case Err(error):
+            context.error_message = error
+
+
+@then('I should see an error message containing "{expected_text}"')
+def step_then_error_contains(context, expected_text):
+    """Verify error message contains expected text."""
+    assert expected_text in context.error_message, (
+        f"Expected '{expected_text}' in error message, "
+        f"but got: {context.error_message}"
+    )
