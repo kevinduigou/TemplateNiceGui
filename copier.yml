@@ -2,6 +2,8 @@
 
 _templates_suffix: .jinja
 _answers_file: .copier-answers.yml
+_skip_if_exists:
+  - .vscode/launch.json
 
 # Project metadata questions
 project_name:
@@ -81,9 +83,7 @@ _exclude:
   - "venv"
   - ".DS_Store"
   # Conditional exclusions
-  - "{% if not use_docker %}Dockerfile{% endif %}"
-  - "{% if not use_docker %}docker-compose.yml.jinja{% endif %}"
-  - "{% if not use_docker %}.dockerignore{% endif %}"
+  - "{% if not use_docker %}docker{% endif %}"
   - "{% if not use_docker %}.devcontainer{% endif %}"
   - "{% if not use_github_actions %}.github{% endif %}"
   - "{% if not use_oauth %}src/{{ project_slug }}/infrastructure/oauth{% endif %}"

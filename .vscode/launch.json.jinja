@@ -1,0 +1,34 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug: {{ project_name }}",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "{{ project_slug }}",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}/src",
+                "DEBUG_MODE": "1"
+            }
+        }{%- if use_rq_worker %},
+        {
+            "name": "Debug: RQ Worker",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "rq.cli",
+            "args": [
+                "worker",
+                "--url",
+                "redis://redis:6379",
+                "default"
+            ],
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "env": {
+                "PYTHONPATH": "${workspaceFolder}/src"
+            }
+        }{%- endif %}
+    ]
+}
