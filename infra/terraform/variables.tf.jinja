@@ -1,0 +1,58 @@
+variable "project_id" {
+  description = "GCP project ID"
+  type        = string
+}
+
+variable "region" {
+  description = "GCP region for the cluster and artifact registry"
+  type        = string
+  default     = "europe-west1"
+}
+
+variable "cluster_name" {
+  description = "Name of the GKE cluster"
+  type        = string
+  default     = "{{ project_slug | replace('_', '-') }}-gke"
+}
+
+variable "artifact_registry_repo" {
+  description = "Artifact Registry repository ID for images"
+  type        = string
+  default     = "{{ project_slug | replace('_', '-') }}-app"
+}
+
+variable "gke_machine_type" {
+  description = "Machine type for worker nodes"
+  type        = string
+  default     = "e2-standard-4"
+}
+
+variable "gke_disk_size_gb" {
+  description = "Node root disk size"
+  type        = number
+  default     = 100
+}
+
+variable "gke_min_node_count" {
+  description = "Minimum nodes in the pool"
+  type        = number
+  default     = 1
+}
+
+variable "gke_max_node_count" {
+  description = "Maximum nodes in the pool"
+  type        = number
+  default     = 5
+}
+
+variable "k8s_namespace" {
+  description = "Namespace for Redis Helm release"
+  type        = string
+  default     = "{{ project_slug | replace('_', '-') }}"
+}
+
+variable "redis_chart_version" {
+  description = "Bitnami Redis chart version"
+  type        = string
+  default     = "18.12.0"
+}

@@ -1,0 +1,32 @@
+fullnameOverride: redis
+architecture: standalone
+auth:
+  enabled: false
+master:
+  persistence:
+    enabled: false
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+extraDeploy:
+  - apiVersion: v1
+    kind: Service
+    metadata:
+      name: redis
+      labels:
+        app.kubernetes.io/instance: redis
+        app.kubernetes.io/name: redis
+    spec:
+      type: ClusterIP
+      ports:
+        - name: redis
+          port: 6379
+          targetPort: 6379
+      selector:
+        app.kubernetes.io/instance: redis
+        app.kubernetes.io/component: master
+        app.kubernetes.io/name: redis
