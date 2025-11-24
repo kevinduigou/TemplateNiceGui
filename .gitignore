@@ -73,3 +73,8 @@ data/
 # OS
 .DS_Store
 Thumbs.db
+
+# Terraform
+.terraform/
+terraform.tfstate*
+.terraform.lock.hcl

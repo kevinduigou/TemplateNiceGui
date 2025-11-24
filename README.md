@@ -135,9 +135,26 @@ my-project/
 │   ├── unit/                    # Unit tests
 │   └── integration/             # Integration tests
 ├── features/                    # BDD tests (behave)
+├── infra/
+│   └── terraform/               # Terraform for GKE, Artifact Registry, Redis, CI IAM
+├── k8s/                         # Kubernetes manifests for FastAPI, RQ worker, ingress
+├── .github/workflows/           # CI/CD pipelines
 ├── pyproject.toml              # Project configuration
 └── README.md
 ```
+
+## GCP/GKE Deployment Starter Kit
+
+- **Terraform** (`infra/terraform/`): Provisions a regional GKE cluster with an autoscaled node pool, Artifact Registry, a Redis Helm release (Bitnami), and a CI service account with the required roles.
+- **Kubernetes manifests** (`k8s/`): Deployments for the FastAPI app and optional RQ worker, HPAs, optional KEDA ScaledObject, ingress, and namespace manifest.
+- **GitHub Actions pipeline** (`.github/workflows/deploy-gke.yml`): Builds and pushes the app image to Artifact Registry, fetches GKE credentials, injects the commit SHA as the image tag, and applies the manifests.
+
+### Bootstrap flow
+
+1. Run `terraform init` and `terraform apply` inside `infra/terraform` (set `project_id`, `region`, and other variables).
+2. Create GitHub secrets: `GCP_PROJECT_ID`, `GCP_REGION`, `GKE_CLUSTER`, `GCP_SA_KEY` (JSON), and `GCP_ARTIFACT_IMAGE` (e.g., `europe-west1-docker.pkg.dev/PROJECT/REPO/app`).
+3. Update `k8s/ingress.yaml` and the image registry path placeholders in the deployment manifests as needed.
+4. Push to `main` to trigger the deployment workflow.
 
 ## Customization
 
