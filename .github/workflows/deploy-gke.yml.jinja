@@ -9,10 +9,10 @@ jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     env:
-      PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-      REGION: ${{ secrets.GCP_REGION }}
-      CLUSTER: ${{ secrets.GKE_CLUSTER }}
-      IMAGE: ${{ secrets.GCP_ARTIFACT_IMAGE }}
+      PROJECT_ID: {% raw %}${{ secrets.GCP_PROJECT_ID }}{% endraw %}
+      REGION: {% raw %}${{ secrets.GCP_REGION }}{% endraw %}
+      CLUSTER: {% raw %}${{ secrets.GKE_CLUSTER }}{% endraw %}
+      IMAGE: {% raw %}${{ secrets.GCP_ARTIFACT_IMAGE }}{% endraw %}
       K8S_NAMESPACE: {{ project_slug }}
 
     steps:
@@ -22,17 +22,17 @@ jobs:
       - name: Set up gcloud
         uses: google-github-actions/setup-gcloud@v2
         with:
-          project_id: ${{ env.PROJECT_ID }}
-          service_account_key: ${{ secrets.GCP_SA_KEY }}
+          project_id: {% raw %}${{ env.PROJECT_ID }}{% endraw %}
+          service_account_key: {% raw %}${{ secrets.GCP_SA_KEY }}{% endraw %}
           export_default_credentials: true
 
       - name: Configure Docker auth
-        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+        run: gcloud auth configure-docker {% raw %}${{ env.REGION }}{% endraw %}-docker.pkg.dev --quiet
 
       - name: Build & push image
         run: |
-          docker build -t $IMAGE:${{ github.sha }} .
-          docker push $IMAGE:${{ github.sha }}
+          docker build -t $IMAGE:{% raw %}${{ github.sha }}{% endraw %} .
+          docker push $IMAGE:{% raw %}${{ github.sha }}{% endraw %}
 
       - name: Get GKE credentials
         run: |
@@ -40,9 +40,9 @@ jobs:
 
       - name: Inject image tag in manifests
         run: |
-          sed -i "s/IMAGE_TAG/${{ github.sha }}/g" k8s/fastapi-deployment.yaml
+          sed -i "s/IMAGE_TAG/{% raw %}${{ github.sha }}{% endraw %}/g" k8s/fastapi-deployment.yaml
 {% if use_rq_worker %}
-          sed -i "s/IMAGE_TAG/${{ github.sha }}/g" k8s/rq-worker-deployment.yaml
+          sed -i "s/IMAGE_TAG/{% raw %}${{ github.sha }}{% endraw %}/g" k8s/rq-worker-deployment.yaml
 {% endif %}
 
       - name: Apply Kubernetes manifests
@@ -58,4 +58,4 @@ jobs:
 {% endif %}
           kubectl apply -f k8s/ingress.yaml
         env:
-          KUBECONFIG: ${{ runner.temp }}/kubeconfig
+          KUBECONFIG: {% raw %}${{ runner.temp }}{% endraw %}/kubeconfig

@@ -32,6 +32,7 @@ class JobMonitorComponent:
         self._db_repository = db_repository
         self._job_id: str | None = None
         self._timer: ui.timer | None = None
+        self._events_count: int = 0
 
         # UI component references
         self._status_label: ui.label | None = None
@@ -105,6 +106,7 @@ class JobMonitorComponent:
                 if self._events_log:
                     self._events_log.clear()
                     self._events_log.push(f"Job started: {job_id}")
+                    self._events_count = 1
 
                 # Start monitoring timer
                 self._start_monitoring()
@@ -151,9 +153,9 @@ class JobMonitorComponent:
                         events = metadata.get("events", [])
                         if self._events_log and events:
                             # Only add new events
-                            current_lines = len(self._events_log)
-                            for event in events[current_lines:]:
+                            for event in events[self._events_count:]:
                                 self._events_log.push(event)
+                            self._events_count = len(events)
 
                     case Err(_):
                         pass
