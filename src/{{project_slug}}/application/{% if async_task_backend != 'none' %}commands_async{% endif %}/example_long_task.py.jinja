@@ -1,0 +1,410 @@
+"""Example long-running task with progress tracking.
+
+This module demonstrates how to create a long-running async job that:
+- Updates job metadata for progress tracking
+- Communicates with the frontend via job metadata
+- Follows clean architecture principles
+- Supports both Redis RQ and GCP Pub/Sub backends
+"""
+
+import logging
+import time
+from typing import Any
+
+from result import Err, Ok, Result
+
+{%- if async_task_backend == 'redis_rq' %}
+from rq import get_current_job
+from rq.job import Job
+{%- elif async_task_backend == 'gcp_pubsub' %}
+from google.cloud import firestore
+{%- endif %}
+
+from {{ project_slug }}.domain.events import TaskCompleted
+{%- if use_sqlite_db %}
+from {{ project_slug }}.infrastructure.cache_db.db_repository import DBRepository
+{%- endif %}
+
+logger = logging.getLogger(__name__)
+
+
+{%- if async_task_backend == 'redis_rq' %}
+
+def _log_and_track(message: str, job: Job | None = None, *args: Any) -> None:
+    """Log a message and add it to job metadata if job is provided.
+
+    Args:
+        message: The message to log (can include format placeholders)
+        job: Optional RQ job to update metadata
+        *args: Arguments for message formatting
+    """
+    logger.info(message, *args)
+    if job is not None:
+        # Format the message with args for metadata
+        formatted_message = message % args if args else message
+        job.meta["events"].append(formatted_message)
+        job.meta["progress"] = job.meta.get("progress", 0)
+        job.save_meta()  # type: ignore[no-untyped-call]
+
+{%- elif async_task_backend == 'gcp_pubsub' %}
+
+def _log_and_track(
+    message: str,
+    job_id: str | None = None,
+    firestore_client: firestore.Client | None = None,
+    firestore_collection: str = "job_metadata",
+    *args: Any
+) -> None:
+    """Log a message and add it to Firestore metadata if job_id is provided.
+
+    Args:
+        message: The message to log (can include format placeholders)
+        job_id: Optional job ID to update metadata
+        firestore_client: Firestore client instance
+        firestore_collection: Firestore collection name
+        *args: Arguments for message formatting
+    """
+    logger.info(message, *args)
+    if job_id is not None and firestore_client is not None:
+        try:
+            # Format the message with args for metadata
+            formatted_message = message % args if args else message
+            
+            job_ref = firestore_client.collection(firestore_collection).document(job_id)
+            job_doc = job_ref.get()
+            
+            if job_doc.exists:
+                job_data = job_doc.to_dict() or {}
+                events = job_data.get("meta", {}).get("events", [])
+                events.append(formatted_message)
+                
+                meta = job_data.get("meta", {})
+                meta["events"] = events
+                
+                job_ref.update({"meta": meta})
+        except Exception as e:
+            logger.error(f"Failed to update Firestore metadata: {e}")
+
+{%- endif %}
+
+
+class ExampleLongTaskUseCase:
+    """Use case for a long-running task with progress tracking."""
+
+{%- if use_sqlite_db %}
+
+    def __init__(self, db_repository: DBRepository):
+        """Initialize the use case.
+
+        Args:
+            db_repository: Database repository for persistence
+        """
+        self._db_repository = db_repository
+{%- else %}
+
+    def __init__(self) -> None:
+        """Initialize the use case."""
+        pass
+{%- endif %}
+
+{%- if async_task_backend == 'redis_rq' %}
+
+    def execute(
+        self,
+        total_items: int = 100,
+        job: Job | None = None,
+    ) -> Result[TaskCompleted, str]:
+        """Execute the long-running task.
+
+        Args:
+            total_items: Number of items to process
+            job: Optional RQ job for progress tracking
+
+        Returns:
+            Ok(TaskCompleted) if successful, Err(str) with error message if failed
+        """
+        _log_and_track("Starting long-running task with %d items", job, total_items)
+
+        # Initialize progress tracking
+        if job is not None:
+            job.meta["progress"] = 0
+            job.meta["total"] = total_items
+            job.meta["current_item"] = 0
+            job.save_meta()  # type: ignore[no-untyped-call]
+
+        processed_count = 0
+
+        # Simulate processing items
+        for item_index in range(total_items):
+            # Simulate work
+            time.sleep(0.1)  # Replace with actual work
+
+            # Update progress
+            processed_count += 1
+            progress_percentage = int((processed_count / total_items) * 100)
+
+            if job is not None:
+                job.meta["progress"] = progress_percentage
+                job.meta["current_item"] = item_index + 1
+                job.save_meta()  # type: ignore[no-untyped-call]
+
+            # Log progress at intervals
+            if processed_count % 10 == 0 or processed_count == total_items:
+                _log_and_track(
+                    "Processed %d/%d items (%d%%)",
+                    job,
+                    processed_count,
+                    total_items,
+                    progress_percentage,
+                )
+
+        _log_and_track("Task completed successfully", job)
+
+        return Ok(
+            TaskCompleted(
+                items_processed=processed_count,
+                message=f"Successfully processed {processed_count} items",
+            )
+        )
+
+{%- elif async_task_backend == 'gcp_pubsub' %}
+
+    def execute(
+        self,
+        total_items: int = 100,
+        job_id: str | None = None,
+        firestore_client: firestore.Client | None = None,
+        firestore_collection: str = "job_metadata",
+    ) -> Result[TaskCompleted, str]:
+        """Execute the long-running task.
+
+        Args:
+            total_items: Number of items to process
+            job_id: Optional job ID for progress tracking
+            firestore_client: Firestore client for metadata updates
+            firestore_collection: Firestore collection name
+
+        Returns:
+            Ok(TaskCompleted) if successful, Err(str) with error message if failed
+        """
+        _log_and_track(
+            "Starting long-running task with %d items",
+            job_id,
+            firestore_client,
+            firestore_collection,
+            total_items,
+        )
+
+        # Initialize progress tracking
+        if job_id is not None and firestore_client is not None:
+            try:
+                job_ref = firestore_client.collection(firestore_collection).document(job_id)
+                job_ref.update({
+                    "meta": {
+                        "progress": 0,
+                        "total": total_items,
+                        "current_item": 0,
+                        "events": [],
+                    }
+                })
+            except Exception as e:
+                logger.error(f"Failed to initialize progress tracking: {e}")
+
+        processed_count = 0
+
+        # Simulate processing items
+        for item_index in range(total_items):
+            # Simulate work
+            time.sleep(0.1)  # Replace with actual work
+
+            # Update progress
+            processed_count += 1
+            progress_percentage = int((processed_count / total_items) * 100)
+
+            if job_id is not None and firestore_client is not None:
+                try:
+                    job_ref = firestore_client.collection(firestore_collection).document(job_id)
+                    job_doc = job_ref.get()
+                    if job_doc.exists:
+                        meta = job_doc.to_dict().get("meta", {})
+                        meta["progress"] = progress_percentage
+                        meta["current_item"] = item_index + 1
+                        job_ref.update({"meta": meta})
+                except Exception as e:
+                    logger.error(f"Failed to update progress: {e}")
+
+            # Log progress at intervals
+            if processed_count % 10 == 0 or processed_count == total_items:
+                _log_and_track(
+                    "Processed %d/%d items (%d%%)",
+                    job_id,
+                    firestore_client,
+                    firestore_collection,
+                    processed_count,
+                    total_items,
+                    progress_percentage,
+                )
+
+        _log_and_track("Task completed successfully", job_id, firestore_client, firestore_collection)
+
+        return Ok(
+            TaskCompleted(
+                items_processed=processed_count,
+                message=f"Successfully processed {processed_count} items",
+            )
+        )
+{%- endif %}
+
+
+{%- if async_task_backend == 'redis_rq' %}
+
+# RQ Entry point for the use case
+def execute_example_long_task_job(
+{%- if use_sqlite_db %}
+    db_url: str,
+{%- endif %}
+    total_items: int = 100,
+) -> TaskCompleted:
+    """Job function to execute the example long-running task.
+
+    This function is designed to be called by RQ workers.
+    It creates repository instances within the job to avoid serialization issues.
+
+    Args:
+{%- if use_sqlite_db %}
+        db_url: Database URL for persistence
+{%- endif %}
+        total_items: Number of items to process
+
+    Returns:
+        TaskCompleted with job result information
+    """
+    # Get current job for tracking progress
+    job = get_current_job()
+    if job is not None:
+        job.meta["events"] = []
+        job.meta["status"] = "running"
+        job.save_meta()  # type: ignore[no-untyped-call]
+
+    logger.info("Starting example long task job")
+{%- if use_sqlite_db %}
+    logger.info("Database URL: %s", db_url)
+{%- endif %}
+    logger.info("Total items: %d", total_items)
+
+    if job is not None:
+        job.meta["events"].append("Job started")
+        job.save_meta()  # type: ignore[no-untyped-call]
+
+{%- if use_sqlite_db %}
+    # Create repository instances within the job
+    db_repository = DBRepository(db_url=db_url)
+
+    use_case = ExampleLongTaskUseCase(db_repository=db_repository)
+{%- else %}
+    use_case = ExampleLongTaskUseCase()
+{%- endif %}
+
+    result = use_case.execute(total_items=total_items, job=job)
+
+    match result:
+        case Ok(event):
+            logger.info(
+                "Job completed successfully, processed %d items",
+                event.items_processed,
+            )
+            if job is not None:
+                job.meta["events"].append(
+                    f"Successfully processed {event.items_processed} items"
+                )
+                job.meta["status"] = "completed"
+                job.save_meta()  # type: ignore[no-untyped-call]
+            return TaskCompleted(
+                items_processed=event.items_processed,
+                message=event.message,
+            )
+        case Err(error):
+            logger.error("Job failed: %s", error)
+            if job is not None:
+                job.meta["events"].append(f"Job failed: {error}")
+                job.meta["status"] = "failed"
+                job.save_meta()  # type: ignore[no-untyped-call]
+            return TaskCompleted(
+                items_processed=0,
+                message=f"Job failed: {error}",
+            )
+
+{%- elif async_task_backend == 'gcp_pubsub' %}
+
+# Pub/Sub Entry point for the use case
+def execute_example_long_task_job(
+{%- if use_sqlite_db %}
+    db_url: str,
+{%- endif %}
+    total_items: int = 100,
+) -> TaskCompleted:
+    """Job function to execute the example long-running task.
+
+    This function is designed to be called by Pub/Sub workers.
+    It creates repository instances within the job to avoid serialization issues.
+
+    Args:
+{%- if use_sqlite_db %}
+        db_url: Database URL for persistence
+{%- endif %}
+        total_items: Number of items to process
+
+    Returns:
+        TaskCompleted with job result information
+    """
+    import os
+    
+    # Get job context from environment (set by worker)
+    job_id = os.environ.get("PUBSUB_JOB_ID")
+    project_id = os.environ.get("GOOGLE_CLOUD_PROJECT")
+    firestore_collection = os.environ.get("FIRESTORE_COLLECTION", "job_metadata")
+    
+    firestore_client = None
+    if project_id:
+        firestore_client = firestore.Client(project=project_id)
+    
+    logger.info("Starting example long task job")
+{%- if use_sqlite_db %}
+    logger.info("Database URL: %s", db_url)
+{%- endif %}
+    logger.info("Total items: %d", total_items)
+    logger.info("Job ID: %s", job_id)
+
+{%- if use_sqlite_db %}
+    # Create repository instances within the job
+    db_repository = DBRepository(db_url=db_url)
+
+    use_case = ExampleLongTaskUseCase(db_repository=db_repository)
+{%- else %}
+    use_case = ExampleLongTaskUseCase()
+{%- endif %}
+
+    result = use_case.execute(
+        total_items=total_items,
+        job_id=job_id,
+        firestore_client=firestore_client,
+        firestore_collection=firestore_collection,
+    )
+
+    match result:
+        case Ok(event):
+            logger.info(
+                "Job completed successfully, processed %d items",
+                event.items_processed,
+            )
+            return TaskCompleted(
+                items_processed=event.items_processed,
+                message=event.message,
+            )
+        case Err(error):
+            logger.error("Job failed: %s", error)
+            return TaskCompleted(
+                items_processed=0,
+                message=f"Job failed: {error}",
+            )
+{%- endif %}

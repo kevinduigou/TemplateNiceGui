@@ -1,35 +1,60 @@
-"""Job Monitor Component for tracking RQ job progress.
+"""Job Monitor Component for tracking async job progress.
 
 This component demonstrates how to:
 - Enqueue long-running jobs
 - Monitor job status and progress
 - Display job metadata in real-time
 - Handle job completion and errors
+- Support both Redis RQ and GCP Pub/Sub backends
 """
 
 from nicegui import ui
 from result import Ok, Err
 
+{%- if async_task_backend == 'redis_rq' %}
 from {{ project_slug }}.infrastructure.rq_client import RQClient
+{%- elif async_task_backend == 'gcp_pubsub' %}
+from {{ project_slug }}.infrastructure.pubsub_client import PubSubClient
+{%- endif %}
+{%- if use_sqlite_db %}
 from {{ project_slug }}.infrastructure.cache_db import DBRepository
+{%- endif %}
 
 
 class JobMonitorComponent:
-    """Component for monitoring RQ job progress."""
+    """Component for monitoring async job progress."""
 
     def __init__(
         self,
+{%- if async_task_backend == 'redis_rq' %}
         rq_client: RQClient,
+{%- elif async_task_backend == 'gcp_pubsub' %}
+        pubsub_client: PubSubClient,
+{%- endif %}
+{%- if use_sqlite_db %}
         db_repository: DBRepository,
+{%- endif %}
     ):
         """Initialize the Job Monitor component.
 
         Args:
+{%- if async_task_backend == 'redis_rq' %}
             rq_client: RQ client for job management
+{%- elif async_task_backend == 'gcp_pubsub' %}
+            pubsub_client: Pub/Sub client for job management
+{%- endif %}
+{%- if use_sqlite_db %}
             db_repository: Database repository
+{%- endif %}
         """
+{%- if async_task_backend == 'redis_rq' %}
         self._rq_client = rq_client
+{%- elif async_task_backend == 'gcp_pubsub' %}
+        self._pubsub_client = pubsub_client
+{%- endif %}
+{%- if use_sqlite_db %}
         self._db_repository = db_repository
+{%- endif %}
         self._job_id: str | None = None
         self._timer: ui.timer | None = None
         self._events_count: int = 0
@@ -82,13 +107,21 @@ class JobMonitorComponent:
 
     async def _start_job(self) -> None:
         """Start a long-running job."""
+{%- if use_sqlite_db %}
         # Get database URL
         db_url = self._db_repository.get_db_url()
+{%- endif %}
 
         # Enqueue the job
+{%- if async_task_backend == 'redis_rq' %}
         result = self._rq_client.enqueue_job(
+{%- elif async_task_backend == 'gcp_pubsub' %}
+        result = self._pubsub_client.enqueue_job(
+{%- endif %}
             "{{ project_slug }}.application.commands_async.example_long_task.execute_example_long_task_job",
+{%- if use_sqlite_db %}
             db_url,
+{%- endif %}
             100,  # total_items
             job_timeout=7200,  # 2 hours timeout
         )
@@ -128,14 +161,22 @@ class JobMonitorComponent:
             return
 
         # Get job status
+{%- if async_task_backend == 'redis_rq' %}
         status_result = self._rq_client.get_job_status(self._job_id)
+{%- elif async_task_backend == 'gcp_pubsub' %}
+        status_result = self._pubsub_client.get_job_status(self._job_id)
+{%- endif %}
         match status_result:
             case Ok(status):
                 if self._status_label:
                     self._status_label.text = status
 
                 # Get job metadata
+{%- if async_task_backend == 'redis_rq' %}
                 meta_result = self._rq_client.get_job_meta(self._job_id)
+{%- elif async_task_backend == 'gcp_pubsub' %}
+                meta_result = self._pubsub_client.get_job_meta(self._job_id)
+{%- endif %}
                 match meta_result:
                     case Ok(metadata):
                         # Update progress bar
@@ -192,7 +233,11 @@ class JobMonitorComponent:
         if not self._job_id:
             return
 
+{%- if async_task_backend == 'redis_rq' %}
         result = self._rq_client.cancel_job(self._job_id)
+{%- elif async_task_backend == 'gcp_pubsub' %}
+        result = self._pubsub_client.cancel_job(self._job_id)
+{%- endif %}
         match result:
             case Ok(_):
                 ui.notify("Job canceled", type="info")

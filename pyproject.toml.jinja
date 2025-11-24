@@ -10,9 +10,13 @@ requires-python = ">={{ python_version }}"
 dependencies = [
     "nicegui>=2.5.0",
     "result>=0.16.0",
-{%- if use_rq_worker %}
+{%- if async_task_backend == 'redis_rq' %}
     "rq>=1.16.0",
     "redis>=5.0.0",
+{%- endif %}
+{%- if async_task_backend == 'gcp_pubsub' %}
+    "google-cloud-pubsub>=2.18.0",
+    "google-cloud-firestore>=2.13.0",
 {%- endif %}
 {%- if use_sqlite_db %}
     "sqlalchemy>=2.0.0",

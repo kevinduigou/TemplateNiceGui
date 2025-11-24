@@ -45,10 +45,14 @@ use_docker:
   help: Include Docker configuration?
   default: true
 
-use_rq_worker:
-  type: bool
-  help: Include RQ worker for long-running tasks?
-  default: true
+async_task_backend:
+  type: str
+  help: Which backend to use for long-running async tasks?
+  default: redis_rq
+  choices:
+    - none
+    - redis_rq
+    - gcp_pubsub
 
 use_github_actions:
   type: bool
@@ -90,13 +94,20 @@ _exclude:
   # Conditional exclusions
   - "{% if not use_docker %}docker{% endif %}"
   - "{% if not use_docker %}.devcontainer{% endif %}"
-  - "{% if not use_rq_worker %}src/{{ project_slug }}/application/commands_async{% endif %}"
-  - "{% if not use_rq_worker %}src/{{ project_slug }}/application/queries_async{% endif %}"
-  - "{% if not use_rq_worker %}src/{{ project_slug }}/infrastructure/rq_client{% endif %}"
-  - "{% if not use_rq_worker %}src/{{ project_slug }}/interface/components/job_monitor_component.py.jinja{% endif %}"
-  - "{% if not use_rq_worker %}k8s/rq-worker-deployment.yaml.jinja{% endif %}"
-  - "{% if not use_rq_worker %}k8s/rq-worker-hpa.yaml.jinja{% endif %}"
-  - "{% if not use_rq_worker %}k8s/keda-scaledobject.yaml.jinja{% endif %}"
+  - "{% if async_task_backend == 'none' %}src/{{ project_slug }}/application/commands_async{% endif %}"
+  - "{% if async_task_backend == 'none' %}src/{{ project_slug }}/application/queries_async{% endif %}"
+  - "{% if async_task_backend != 'redis_rq' %}src/{{ project_slug }}/infrastructure/rq_client{% endif %}"
+  - "{% if async_task_backend != 'redis_rq' %}docker/Dockerfile.worker.jinja{% endif %}"
+  - "{% if async_task_backend != 'redis_rq' %}k8s/rq-worker-deployment.yaml.jinja{% endif %}"
+  - "{% if async_task_backend != 'redis_rq' %}k8s/rq-worker-hpa.yaml.jinja{% endif %}"
+  - "{% if async_task_backend != 'redis_rq' %}k8s/keda-scaledobject.yaml.jinja{% endif %}"
+  - "{% if async_task_backend != 'redis_rq' %}infra/terraform/redis_helm.tf.jinja{% endif %}"
+  - "{% if async_task_backend != 'redis_rq' %}infra/terraform/values/redis-values.yaml.jinja{% endif %}"
+  - "{% if async_task_backend != 'gcp_pubsub' %}src/{{ project_slug }}/infrastructure/pubsub_client{% endif %}"
+  - "{% if async_task_backend != 'gcp_pubsub' %}docker/Dockerfile.pubsub-worker.jinja{% endif %}"
+  - "{% if async_task_backend != 'gcp_pubsub' %}infra/terraform/pubsub.tf.jinja{% endif %}"
+  - "{% if async_task_backend != 'gcp_pubsub' %}infra/terraform/cloud_run.tf.jinja{% endif %}"
+  - "{% if async_task_backend == 'none' %}src/{{ project_slug }}/interface/components/job_monitor_component.py.jinja{% endif %}"
   - "{% if not use_github_actions %}.github{% endif %}"
   - "{% if not use_sqlite_db %}src/{{ project_slug }}/infrastructure/cache_db{% endif %}"
   - "{% if not use_oauth %}src/{{ project_slug }}/infrastructure/oauth{% endif %}"

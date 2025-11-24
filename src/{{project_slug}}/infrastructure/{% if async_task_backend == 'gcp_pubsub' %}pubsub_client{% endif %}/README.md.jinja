@@ -1,0 +1,190 @@
+# GCP Pub/Sub Client
+
+This module provides a client for managing asynchronous jobs using Google Cloud Pub/Sub and Firestore.
+
+## Architecture
+
+The GCP Pub/Sub implementation uses:
+- **Pub/Sub**: For message queuing and task distribution
+- **Firestore**: For job metadata, status tracking, and results storage
+
+## Usage
+
+### Initialize the Client
+
+```python
+from {{ project_slug }}.infrastructure.pubsub_client import PubSubClient
+
+# Initialize with GCP project ID
+client = PubSubClient(
+    project_id="your-gcp-project-id",
+    topic_name="async-tasks",  # Optional, defaults to "async-tasks"
+    firestore_collection="job_metadata"  # Optional, defaults to "job_metadata"
+)
+```
+
+### Enqueue a Job
+
+```python
+from result import Ok, Err
+
+result = client.enqueue_job(
+    "{{ project_slug }}.application.commands_async.example_long_task.execute_example_long_task_job",
+    db_url,
+    100,  # total_items
+    job_timeout=7200,  # 2 hours timeout
+)
+
+match result:
+    case Ok(job_id):
+        print(f"Job enqueued: {job_id}")
+    case Err(error):
+        print(f"Failed to enqueue job: {error}")
+```
+
+### Check Job Status
+
+```python
+status_result = client.get_job_status(job_id)
+match status_result:
+    case Ok(status):
+        print(f"Job status: {status}")
+        # Possible statuses: queued, running, finished, failed, canceled
+    case Err(error):
+        print(f"Error: {error}")
+```
+
+### Get Job Metadata
+
+```python
+meta_result = client.get_job_meta(job_id)
+match meta_result:
+    case Ok(metadata):
+        progress = metadata.get("progress", 0)
+        events = metadata.get("events", [])
+        print(f"Progress: {progress}%")
+        for event in events:
+            print(f"  - {event}")
+    case Err(error):
+        print(f"Error: {error}")
+```
+
+### Get Job Result
+
+```python
+result = client.get_job_result(job_id)
+match result:
+    case Ok(job_result):
+        print(f"Job completed with result: {job_result}")
+    case Err(error):
+        print(f"Error: {error}")
+```
+
+### Cancel a Job
+
+```python
+cancel_result = client.cancel_job(job_id)
+match cancel_result:
+    case Ok(_):
+        print("Job canceled successfully")
+    case Err(error):
+        print(f"Failed to cancel job: {error}")
+```
+
+## GCP Setup Requirements
+
+### 1. Enable Required APIs
+
+```bash
+gcloud services enable pubsub.googleapis.com
+gcloud services enable firestore.googleapis.com
+```
+
+### 2. Create Pub/Sub Topic
+
+```bash
+gcloud pubsub topics create async-tasks
+```
+
+### 3. Create Pub/Sub Subscription
+
+```bash
+gcloud pubsub subscriptions create async-tasks-sub \
+    --topic=async-tasks \
+    --ack-deadline=600
+```
+
+### 4. Initialize Firestore
+
+Firestore will be automatically initialized when first accessed. Ensure your GCP project has Firestore enabled in Native mode.
+
+### 5. Set Up Authentication
+
+For local development:
+```bash
+gcloud auth application-default login
+```
+
+For production (GKE), use Workload Identity or service account keys.
+
+## Job Metadata Structure
+
+Jobs are stored in Firestore with the following structure:
+
+```json
+{
+  "job_id": "uuid-string",
+  "function": "module.path.to.function",
+  "status": "queued|running|finished|failed|canceled",
+  "created_at": "timestamp",
+  "timeout": 7200,
+  "meta": {
+    "progress": 50,
+    "current_item": 50,
+    "total": 100,
+    "events": ["Event 1", "Event 2"]
+  },
+  "result": "job result (when finished)",
+  "error": "error message (when failed)"
+}
+```
+
+## Error Handling
+
+All methods return `Result[T, str]` types:
+- `Ok(value)` on success
+- `Err(error_message)` on failure
+
+This follows the Rust-style error handling pattern used throughout the application.
+
+## Connection Testing
+
+```python
+# Test connection at initialization
+status = client.get_connection_status()
+print(f"Connection status: {status}")
+
+# Test connection on demand
+test_result = client.test_connection_now()
+match test_result:
+    case Ok(_):
+        print("Connection successful")
+    case Err(error):
+        print(f"Connection failed: {error}")
+```
+
+## Monitoring
+
+Get queue information:
+
+```python
+info_result = client.get_queue_info()
+match info_result:
+    case Ok(info):
+        print(f"Topic: {info['topic_name']}")
+        print(f"Queued jobs: {info['queued_job_count']}")
+        print(f"Running jobs: {info['running_job_count']}")
+        print(f"Finished jobs: {info['finished_job_count']}")
+        print(f"Failed jobs: {info['failed_job_count']}")
+    case Err(error):
+        print(f"Error: {error}")

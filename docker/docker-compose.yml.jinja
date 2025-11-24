@@ -11,7 +11,7 @@ services:
         USER_GID: ${GID:-1000}
     image: {{ project_slug }}:base
 
-{%- if use_rq_worker %}
+{%- if async_task_backend == 'redis_rq' %}
 
   # Redis service for RQ (Redis Queue)
   redis:
@@ -53,6 +53,38 @@ services:
       - {{ project_slug }}-network
 {%- endif %}
 
+{%- if async_task_backend == 'gcp_pubsub' %}
+
+  # GCP Pub/Sub Worker service
+  pubsub-worker:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.pubsub-worker
+      args:
+        PROJECT_NAME: {{ project_slug }}
+    restart: unless-stopped
+    depends_on:
+      - base
+    volumes:
+      - ../data:/opt/{{ project_slug }}/data
+      - ~/.config/gcloud:/root/.config/gcloud:ro  # Mount GCP credentials for local dev
+    environment:
+      - GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT}
+      - PUBSUB_SUBSCRIPTION=async-tasks-sub
+      - FIRESTORE_COLLECTION=job_metadata
+{%- if use_oauth %}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+{%- if oauth_providers in ['twitter', 'both'] %}
+      - TWITTER_CLIENT_ID=${TWITTER_CLIENT_ID}
+      - TWITTER_CLIENT_SECRET=${TWITTER_CLIENT_SECRET}
+{%- endif %}
+      - STORAGE_SECRET=${STORAGE_SECRET}
+{%- endif %}
+    networks:
+      - {{ project_slug }}-network
+{%- endif %}
+
   # NiceGUI Dashboard service
   nicegui:
     build:
@@ -63,17 +95,24 @@ services:
     restart: unless-stopped
     depends_on:
       - base
-{%- if use_rq_worker %}
+{%- if async_task_backend == 'redis_rq' %}
       - redis
       - worker
+{%- elif async_task_backend == 'gcp_pubsub' %}
+      - pubsub-worker
 {%- endif %}
     ports:
       - "8080:8080"
     volumes:
       - ../data:/opt/{{ project_slug }}/data
+{%- if async_task_backend == 'gcp_pubsub' %}
+      - ~/.config/gcloud:/root/.config/gcloud:ro  # Mount GCP credentials for local dev
+{%- endif %}
     environment:
-{%- if use_rq_worker %}
+{%- if async_task_backend == 'redis_rq' %}
       - REDIS_URL=redis://redis:6379
+{%- elif async_task_backend == 'gcp_pubsub' %}
+      - GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT}
 {%- endif %}
 {%- if use_oauth %}
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
@@ -87,7 +126,7 @@ services:
     networks:
       - {{ project_slug }}-network
 
-{%- if use_rq_worker %}
+{%- if async_task_backend == 'redis_rq' %}
 
 volumes:
   redis-data:

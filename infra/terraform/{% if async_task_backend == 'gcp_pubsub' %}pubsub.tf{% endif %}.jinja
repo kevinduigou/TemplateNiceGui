@@ -1,0 +1,132 @@
+# GCP Pub/Sub and Firestore configuration for async task processing
+
+# Create Pub/Sub topic for async tasks
+resource "google_pubsub_topic" "async_tasks" {
+  name    = "async-tasks"
+  project = var.project_id
+
+  message_retention_duration = "86400s" # 24 hours
+
+  labels = {
+    environment = var.environment
+    managed_by  = "terraform"
+  }
+}
+
+# Create Pub/Sub subscription for workers
+resource "google_pubsub_subscription" "async_tasks_sub" {
+  name    = "async-tasks-sub"
+  topic   = google_pubsub_topic.async_tasks.name
+  project = var.project_id
+
+  # Acknowledge deadline - how long worker has to process message
+  ack_deadline_seconds = 600 # 10 minutes
+
+  # Message retention - how long undelivered messages are kept
+  message_retention_duration = "86400s" # 24 hours
+
+  # Retry policy
+  retry_policy {
+    minimum_backoff = "10s"
+    maximum_backoff = "600s"
+  }
+
+  # Dead letter policy - send failed messages to dead letter topic after max attempts
+  dead_letter_policy {
+    dead_letter_topic     = google_pubsub_topic.async_tasks_dead_letter.id
+    max_delivery_attempts = 5
+  }
+
+  # Enable message ordering if needed
+  enable_message_ordering = false
+
+  labels = {
+    environment = var.environment
+    managed_by  = "terraform"
+  }
+}
+
+# Create dead letter topic for failed messages
+resource "google_pubsub_topic" "async_tasks_dead_letter" {
+  name    = "async-tasks-dead-letter"
+  project = var.project_id
+
+  message_retention_duration = "604800s" # 7 days
+
+  labels = {
+    environment = var.environment
+    managed_by  = "terraform"
+  }
+}
+
+# Create dead letter subscription for monitoring
+resource "google_pubsub_subscription" "async_tasks_dead_letter_sub" {
+  name    = "async-tasks-dead-letter-sub"
+  topic   = google_pubsub_topic.async_tasks_dead_letter.name
+  project = var.project_id
+
+  ack_deadline_seconds       = 60
+  message_retention_duration = "604800s" # 7 days
+
+  labels = {
+    environment = var.environment
+    managed_by  = "terraform"
+  }
+}
+
+# Enable Firestore API
+resource "google_project_service" "firestore" {
+  project = var.project_id
+  service = "firestore.googleapis.com"
+
+  disable_on_destroy = false
+}
+
+# Create Firestore database (Native mode)
+resource "google_firestore_database" "database" {
+  project     = var.project_id
+  name        = "(default)"
+  location_id = var.region
+  type        = "FIRESTORE_NATIVE"
+
+  depends_on = [google_project_service.firestore]
+}
+
+# IAM binding for Pub/Sub publisher (for the main app)
+resource "google_pubsub_topic_iam_member" "publisher" {
+  project = var.project_id
+  topic   = google_pubsub_topic.async_tasks.name
+  role    = "roles/pubsub.publisher"
+  member  = "serviceAccount:${var.project_id}@appspot.gserviceaccount.com"
+}
+
+# IAM binding for Pub/Sub subscriber (for workers)
+resource "google_pubsub_subscription_iam_member" "subscriber" {
+  project      = var.project_id
+  subscription = google_pubsub_subscription.async_tasks_sub.name
+  role         = "roles/pubsub.subscriber"
+  member       = "serviceAccount:${var.project_id}@appspot.gserviceaccount.com"
+}
+
+# IAM binding for Firestore (for both app and workers)
+resource "google_project_iam_member" "firestore_user" {
+  project = var.project_id
+  role    = "roles/datastore.user"
+  member  = "serviceAccount:${var.project_id}@appspot.gserviceaccount.com"
+}
+
+# Output the topic and subscription names
+output "pubsub_topic_name" {
+  description = "Name of the Pub/Sub topic for async tasks"
+  value       = google_pubsub_topic.async_tasks.name
+}
+
+output "pubsub_subscription_name" {
+  description = "Name of the Pub/Sub subscription for workers"
+  value       = google_pubsub_subscription.async_tasks_sub.name
+}
+
+output "firestore_database_name" {
+  description = "Name of the Firestore database"
+  value       = google_firestore_database.database.name
+}
