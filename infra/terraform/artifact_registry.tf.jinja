@@ -3,4 +3,6 @@ resource "google_artifact_registry_repository" "app" {
   repository_id = var.artifact_registry_repo
   description   = "Container images for the FastAPI and RQ worker services"
   format        = "DOCKER"
+
+  depends_on = [time_sleep.wait_for_apis]
 }
