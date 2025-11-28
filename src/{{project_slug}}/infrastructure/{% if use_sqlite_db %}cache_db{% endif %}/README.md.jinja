@@ -199,7 +199,7 @@ This directory is automatically created and is excluded from git (see `.gitignor
 When using the database with RQ workers for long-running tasks, pass the database URL to the job function:
 
 ```python
-from {{ project_slug }}.infrastructure.rq_client import RQClient
+from {{ project_slug }}.infrastructure.rq_client.rq_client import RQClient
 from {{ project_slug }}.infrastructure.cache_db import DBRepository
 
 # In your UI or application code

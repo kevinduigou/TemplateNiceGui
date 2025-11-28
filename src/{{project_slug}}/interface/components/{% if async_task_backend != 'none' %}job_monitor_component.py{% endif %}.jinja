@@ -12,7 +12,7 @@ from nicegui import ui
 from result import Ok, Err
 
 {%- if async_task_backend == 'redis_rq' %}
-from {{ project_slug }}.infrastructure.rq_client import RQClient
+from {{ project_slug }}.infrastructure.rq_client.rq_client import RQClient
 {%- elif async_task_backend == 'gcp_pubsub' %}
 from {{ project_slug }}.infrastructure.pubsub_client import PubSubClient
 {%- endif %}
