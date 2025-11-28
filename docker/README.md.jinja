@@ -1,0 +1,176 @@
+# Docker Compose Setup
+
+This directory contains the Docker configuration for running {{ project_name }} with Docker Compose.
+
+## Services
+
+The docker-compose.yml file defines the following services:
+
+### 1. NiceGUI Frontend (`nicegui`)
+- **Purpose**: Main web application interface
+- **Port**: 8080
+- **Access**: http://localhost:8080
+
+{%- if async_task_backend == 'redis_rq' %}
+
+### 2. Redis (`redis`)
+- **Purpose**: Message broker for async task queue
+- **Port**: 6379
+- **Image**: redis:7-alpine
+- **Persistence**: Data stored in `redis-data` volume
+
+### 3. RQ Worker (`worker`)
+- **Purpose**: Processes long-running background tasks
+- **Dependencies**: Requires Redis to be healthy before starting
+{%- endif %}
+
+## Quick Start
+
+### Prerequisites
+
+- Docker and Docker Compose installed
+{%- if use_oauth %}
+- Environment variables configured (see `.env` file)
+{%- endif %}
+
+### Running the Application
+
+1. Navigate to the docker directory:
+   ```bash
+   cd docker
+   ```
+
+2. Start all services:
+   ```bash
+   docker compose up
+   ```
+
+3. Start services in detached mode (background):
+   ```bash
+   docker compose up -d
+   ```
+
+4. View logs:
+   ```bash
+   docker compose logs -f
+   ```
+
+5. Stop all services:
+   ```bash
+   docker compose down
+   ```
+
+6. Stop and remove volumes:
+   ```bash
+   docker compose down -v
+   ```
+
+## Service Management
+
+### Build or rebuild services
+```bash
+docker compose build
+```
+
+### Start specific service
+```bash
+docker compose up nicegui
+```
+
+### View service status
+```bash
+docker compose ps
+```
+
+### Execute commands in running container
+```bash
+docker compose exec nicegui bash
+```
+
+## Environment Variables
+
+{%- if use_oauth %}
+
+Create a `.env` file in the project root with the following variables:
+
+```env
+# OAuth Configuration
+GOOGLE_CLIENT_ID=your_google_client_id
+GOOGLE_CLIENT_SECRET=your_google_client_secret
+{%- if oauth_providers in ['twitter', 'both'] %}
+TWITTER_CLIENT_ID=your_twitter_client_id
+TWITTER_CLIENT_SECRET=your_twitter_client_secret
+{%- endif %}
+STORAGE_SECRET=your_random_secret_key
+```
+{%- endif %}
+
+## Data Persistence
+
+{%- if async_task_backend == 'redis_rq' %}
+
+- **Redis data**: Stored in Docker volume `redis-data`
+{%- endif %}
+- **Application data**: Mounted from `../data` directory
+
+## Networking
+
+All services communicate through the `{{ project_slug }}-network` bridge network.
+
+{%- if async_task_backend == 'redis_rq' %}
+
+Service URLs within the network:
+- Redis: `redis://redis:6379`
+- NiceGUI: `http://nicegui:8080`
+{%- endif %}
+
+## Troubleshooting
+
+### Services won't start
+```bash
+# Check logs for errors
+docker compose logs
+
+# Rebuild images
+docker compose build --no-cache
+```
+
+### Port already in use
+Edit `docker-compose.yml` to change the port mapping:
+```yaml
+ports:
+  - "8081:8080"  # Change 8081 to any available port
+```
+
+{%- if async_task_backend == 'redis_rq' %}
+
+### Redis connection issues
+```bash
+# Check Redis health
+docker compose exec redis redis-cli ping
+
+# Should return: PONG
+```
+{%- endif %}
+
+### Clean restart
+```bash
+# Stop everything and remove volumes
+docker compose down -v
+
+# Rebuild and start
+docker compose up --build
+```
+
+## Development Workflow
+
+For development, you can mount your source code as a volume to enable hot-reloading:
+
+```yaml
+volumes:
+  - ../src:/opt/{{ project_slug }}/src
+```
+
+Then restart the service:
+```bash
+docker compose restart nicegui

@@ -1,18 +1,5 @@
 services:
-  # Base image build
-  base:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile
-      target: base
-      args:
-        USERNAME: ${USER:-appuser}
-        USER_UID: ${UID:-1000}
-        USER_GID: ${GID:-1000}
-    image: {{ project_slug }}:base
-
 {%- if async_task_backend == 'redis_rq' %}
-
   # Redis service for RQ (Redis Queue)
   redis:
     image: redis:7-alpine
@@ -24,6 +11,11 @@ services:
     command: redis-server --appendonly yes
     networks:
       - {{ project_slug }}-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
 
   # RQ Worker service
   worker:
@@ -34,8 +26,8 @@ services:
         PROJECT_NAME: {{ project_slug }}
     restart: unless-stopped
     depends_on:
-      - base
-      - redis
+      redis:
+        condition: service_healthy
     volumes:
       - ../data:/opt/{{ project_slug }}/data
     environment:
@@ -53,39 +45,7 @@ services:
       - {{ project_slug }}-network
 {%- endif %}
 
-{%- if async_task_backend == 'gcp_pubsub' %}
-
-  # GCP Pub/Sub Worker service
-  pubsub-worker:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile.pubsub-worker
-      args:
-        PROJECT_NAME: {{ project_slug }}
-    restart: unless-stopped
-    depends_on:
-      - base
-    volumes:
-      - ../data:/opt/{{ project_slug }}/data
-      - ~/.config/gcloud:/root/.config/gcloud:ro  # Mount GCP credentials for local dev
-    environment:
-      - GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT}
-      - PUBSUB_SUBSCRIPTION=async-tasks-sub
-      - FIRESTORE_COLLECTION=job_metadata
-{%- if use_oauth %}
-      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
-      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
-{%- if oauth_providers in ['twitter', 'both'] %}
-      - TWITTER_CLIENT_ID=${TWITTER_CLIENT_ID}
-      - TWITTER_CLIENT_SECRET=${TWITTER_CLIENT_SECRET}
-{%- endif %}
-      - STORAGE_SECRET=${STORAGE_SECRET}
-{%- endif %}
-    networks:
-      - {{ project_slug }}-network
-{%- endif %}
-
-  # NiceGUI Dashboard service
+  # NiceGUI Frontend service
   nicegui:
     build:
       context: ..
@@ -93,26 +53,20 @@ services:
       args:
         PROJECT_NAME: {{ project_slug }}
     restart: unless-stopped
-    depends_on:
-      - base
 {%- if async_task_backend == 'redis_rq' %}
-      - redis
-      - worker
-{%- elif async_task_backend == 'gcp_pubsub' %}
-      - pubsub-worker
+    depends_on:
+      redis:
+        condition: service_healthy
+      worker:
+        condition: service_started
 {%- endif %}
     ports:
       - "8080:8080"
     volumes:
       - ../data:/opt/{{ project_slug }}/data
-{%- if async_task_backend == 'gcp_pubsub' %}
-      - ~/.config/gcloud:/root/.config/gcloud:ro  # Mount GCP credentials for local dev
-{%- endif %}
     environment:
 {%- if async_task_backend == 'redis_rq' %}
       - REDIS_URL=redis://redis:6379
-{%- elif async_task_backend == 'gcp_pubsub' %}
-      - GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT}
 {%- endif %}
 {%- if use_oauth %}
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
