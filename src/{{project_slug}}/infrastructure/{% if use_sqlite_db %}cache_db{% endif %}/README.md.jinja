@@ -192,7 +192,7 @@ data/{{ project_slug }}.db
 
 This directory is automatically created and is excluded from git (see `.gitignore`).
 
-{%- if use_rq_worker %}
+{%- if async_task_backend == 'redis_rq' %}
 
 ## Using with RQ Workers
 

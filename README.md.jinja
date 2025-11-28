@@ -132,7 +132,7 @@ This project includes a complete VS Code Dev Container configuration for a consi
 - Automatic installation of recommended VS Code extensions
 - Ruff, mypy, and pytest pre-configured
 - Format on save enabled
-{%- if use_rq_worker %}
+{%- if async_task_backend == 'redis_rq' %}
 - Redis service automatically started
 {%- endif %}
 
@@ -155,7 +155,7 @@ The Dockerfile uses multi-stage builds for efficiency:
 - **dev-base**: Development environment (used by devcontainer)
 - **dependencies**: Installs Python packages
 - **production**: Minimal production image
-{%- if use_rq_worker %}
+{%- if async_task_backend == 'redis_rq' %}
 - **worker**: RQ worker for background tasks
 {%- endif %}
 
@@ -211,7 +211,7 @@ uv run pytest --cov={{ project_slug }} --cov-report=html
 │       ├── application/         # Use cases
 │       │   ├── commands/        # State-changing operations
 │       │   ├── queries/         # Read-only operations
-{%- if use_rq_worker %}
+{%- if async_task_backend == 'redis_rq' %}
 │       │   ├── commands_async/  # Long-running commands (RQ)
 │       │   └── queries_async/   # Long-running queries (RQ)
 {%- endif %}
@@ -281,7 +281,7 @@ result = db_repo.save_example("id-1", "Example Name", "Description")
 See `src/{{ project_slug }}/infrastructure/cache_db/README.md` for detailed documentation.
 
 {%- endif %}
-{%- if use_rq_worker %}
+{%- if async_task_backend == 'redis_rq' %}
 
 ### Background Task Processing
 

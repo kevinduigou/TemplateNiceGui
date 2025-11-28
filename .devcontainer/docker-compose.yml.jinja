@@ -14,7 +14,7 @@ services:
     command: sleep infinity
 
     # Runs app on the same network as the Redis container
-{%- if use_rq_worker %}
+{%- if async_task_backend == 'redis_rq' %}
     depends_on:
       - redis
 
@@ -34,7 +34,7 @@ services:
     # security_opt:
     #   - seccomp:unconfined
 
-{%- if use_rq_worker %}
+{%- if async_task_backend == 'redis_rq' %}
 
   # Redis service for RQ (Redis Queue)
   redis:
@@ -47,7 +47,7 @@ services:
     command: redis-server --appendonly yes
 {%- endif %}
 
-{%- if use_rq_worker %}
+{%- if async_task_backend == 'redis_rq' %}
 
 volumes:
   redis-data:
