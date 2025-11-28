@@ -1,5 +1,22 @@
 services:
+  # Base image for Python environment
+  base:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: base
+      args:
+        PYTHON_VERSION: "{{ python_version }}"
+        PROJECT_WORKDIR: /opt/{{ project_slug }}
+    image: {{ project_slug }}:base
+    command: ["tail", "-f", "/dev/null"]  # Keep container running
+    env_file:
+      - ../.env
+    networks:
+      - {{ project_slug }}-network
+
 {%- if async_task_backend == 'redis_rq' %}
+
   # Redis service for RQ (Redis Queue)
   redis:
     image: redis:7-alpine
@@ -25,22 +42,17 @@ services:
       args:
         PROJECT_NAME: {{ project_slug }}
     restart: unless-stopped
+    env_file:
+      - ../.env
     depends_on:
+      base:
+        condition: service_started
       redis:
         condition: service_healthy
     volumes:
       - ../data:/opt/{{ project_slug }}/data
     environment:
       - REDIS_URL=redis://redis:6379
-{%- if use_oauth %}
-      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
-      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
-{%- if oauth_providers in ['twitter', 'both'] %}
-      - TWITTER_CLIENT_ID=${TWITTER_CLIENT_ID}
-      - TWITTER_CLIENT_SECRET=${TWITTER_CLIENT_SECRET}
-{%- endif %}
-      - STORAGE_SECRET=${STORAGE_SECRET}
-{%- endif %}
     networks:
       - {{ project_slug }}-network
 {%- endif %}
@@ -53,8 +65,12 @@ services:
       args:
         PROJECT_NAME: {{ project_slug }}
     restart: unless-stopped
-{%- if async_task_backend == 'redis_rq' %}
+    env_file:
+      - ../.env
     depends_on:
+      base:
+        condition: service_started
+{%- if async_task_backend == 'redis_rq' %}
       redis:
         condition: service_healthy
       worker:
@@ -67,15 +83,6 @@ services:
     environment:
 {%- if async_task_backend == 'redis_rq' %}
       - REDIS_URL=redis://redis:6379
-{%- endif %}
-{%- if use_oauth %}
-      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
-      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
-{%- if oauth_providers in ['twitter', 'both'] %}
-      - TWITTER_CLIENT_ID=${TWITTER_CLIENT_ID}
-      - TWITTER_CLIENT_SECRET=${TWITTER_CLIENT_SECRET}
-{%- endif %}
-      - STORAGE_SECRET=${STORAGE_SECRET}
 {%- endif %}
     networks:
       - {{ project_slug }}-network
