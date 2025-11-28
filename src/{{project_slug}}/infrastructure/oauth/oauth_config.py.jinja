@@ -1,16 +1,11 @@
 """OAuth configuration and setup."""
 
 import logging
-import time
-from typing import Optional
-
-from authlib.integrations.starlette_client import OAuth
-from fastapi import Request
-import httpx
-from starlette.responses import RedirectResponse
-
-from nicegui import app
 import os
+import time
+
+import httpx
+from authlib.integrations.starlette_client import OAuth
 
 # OAuth Configuration
 # IMPORTANT: Replace these with your actual credentials from:
@@ -30,6 +25,14 @@ GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
 TWITTER_CLIENT_ID = os.getenv("TWITTER_CLIENT_ID", "")
 TWITTER_CLIENT_SECRET = os.getenv("TWITTER_CLIENT_SECRET", "")
 {%- endif %}
+
+# Base URL for OAuth callbacks
+# This should match the URL where your app is accessible
+# Examples:
+# - Local development: http://localhost:8080
+# - Docker with port forwarding: http://localhost:34421
+# - Codespaces: https://your-codespace-url.github.dev
+BASE_URL = os.getenv("BASE_URL", "http://localhost:8080")
 
 # Initialize OAuth
 oauth = OAuth()
@@ -57,7 +60,7 @@ oauth.register(
     api_base_url="https://api.twitter.com/2/",
     access_token_url="https://api.twitter.com/2/oauth2/token",
     authorize_url="https://twitter.com/i/oauth2/authorize",
-    redirect_uri="http://localhost:8080/auth/twitter/callback",
+    redirect_uri=f"{BASE_URL}/auth/twitter/callback",
     client_kwargs={
         "scope": "tweet.read tweet.write users.read offline.access",
         "code_challenge_method": "S256",  # Required by Twitter OAuth 2.0
@@ -68,10 +71,10 @@ oauth.register(
 
 def validate_user_info(user_info: dict) -> bool:
     """Validate user info from OAuth provider.
-    
+
     Args:
         user_info: User information dictionary from OAuth provider
-        
+
     Returns:
         True if user info is valid, False otherwise
     """
@@ -106,10 +109,10 @@ def validate_user_info(user_info: dict) -> bool:
 
 
 async def revoke_oauth_token(
-    token: dict, provider: Optional[str] = None
+    token: dict, provider: str | None = None
 ) -> None:
     """Revoke OAuth token on logout.
-    
+
     Args:
         token: OAuth token dictionary
         provider: OAuth provider name ('google' or 'twitter')
