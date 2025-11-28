@@ -26,7 +26,9 @@ COPY --chown=${USERNAME}:${USERNAME} src ./src
 RUN uv sync --no-dev
 
 # Create data directory for SQLite database
-RUN mkdir -p data
+RUN mkdir -p data \
+ && chown -R ${USERNAME}:${USERNAME} data \
+ && chmod -R 755 data
 
 # Run RQ worker
 CMD ["uv", "run", "rq", "worker", "--url", "redis://redis:6379", "default"]

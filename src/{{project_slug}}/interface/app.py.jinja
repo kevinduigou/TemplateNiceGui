@@ -22,8 +22,8 @@ from {{ project_slug }}.interface.pages.home import create_home_page  # noqa: E4
 {%- endif %}
 
 ui.run(
-    host="localhost",  # NOTE: this ensures that you can run the app locally, accessing via http://127.0.0.1:8080 is not supported by Google OAuth2
+    host=os.getenv("NICEGUI_HOST", "0.0.0.0"),  # Use 0.0.0.0 in Docker, localhost for local dev
     storage_secret=os.getenv("STORAGE_SECRET", "random secret goes here"),
-    port=8082,
+    port=int(os.getenv("NICEGUI_PORT", "8080")),
     reload=False
 )

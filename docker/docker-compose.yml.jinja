@@ -50,7 +50,7 @@ services:
       redis:
         condition: service_healthy
     volumes:
-      - ../data:/opt/{{ project_slug }}/data
+      - app-data:/opt/{{ project_slug }}/data
     environment:
       - REDIS_URL=redis://redis:6379
     networks:
@@ -79,7 +79,7 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      - ../data:/opt/{{ project_slug }}/data
+      - app-data:/opt/{{ project_slug }}/data
     environment:
 {%- if async_task_backend == 'redis_rq' %}
       - REDIS_URL=redis://redis:6379
@@ -87,10 +87,10 @@ services:
     networks:
       - {{ project_slug }}-network
 
-{%- if async_task_backend == 'redis_rq' %}
-
 volumes:
-  redis-data:
+  app-data:  # Shared volume for SQLite database and application data
+{%- if async_task_backend == 'redis_rq' %}
+  redis-data:  # Volume for Redis persistence
 {%- endif %}
 
 networks:
