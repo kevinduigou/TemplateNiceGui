@@ -7,7 +7,7 @@ Models are used only in the infrastructure layer for persistence.
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import DateTime, String
+from sqlalchemy import DateTime, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -15,6 +15,24 @@ class Base(DeclarativeBase):
     """Base class for all ORM models."""
 
     pass
+
+
+class User(Base):
+    """User ORM model for storing authenticated user information.
+    
+    Stores user data from OAuth providers (Google, Twitter).
+    """
+
+    __tablename__ = "users"
+
+    user_id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    email: Mapped[str] = mapped_column(String(512), nullable=False, unique=True)
+    name: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
+    picture: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    oauth_provider: Mapped[str] = mapped_column(String(50), nullable=False)  # 'google' or 'twitter'
+    oauth_sub: Mapped[str] = mapped_column(String(512), nullable=False)  # Provider's user ID
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    last_login_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
 
 
 class ExampleModel(Base):

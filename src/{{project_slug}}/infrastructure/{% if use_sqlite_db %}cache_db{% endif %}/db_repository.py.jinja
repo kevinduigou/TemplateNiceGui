@@ -11,7 +11,7 @@ from result import Err, Ok, Result
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from {{ project_slug }}.infrastructure.cache_db.db_models import Base, ExampleModel
+from {{ project_slug }}.infrastructure.cache_db.db_models import Base, ExampleModel, User
 
 
 class DBRepository:
@@ -163,5 +163,93 @@ class DBRepository:
                     session.delete(model)
                     session.commit()
                 return Ok(None)
+        except Exception as e:
+            return Err(f"Database error: {str(e)}")
+
+    def save_user(
+        self,
+        user_id: str,
+        email: str,
+        oauth_provider: str,
+        oauth_sub: str,
+        name: str | None = None,
+        picture: str | None = None,
+    ) -> Result[None, str]:
+        """Save or update a user record.
+
+        Args:
+            user_id: Unique identifier for the user
+            email: User's email address
+            oauth_provider: OAuth provider name ('google' or 'twitter')
+            oauth_sub: Provider's user ID
+            name: User's display name (optional)
+            picture: URL to user's profile picture (optional)
+
+        Returns:
+            Ok(None) if successful
+            Err(str) with error message if failed
+        """
+        try:
+            with self._session_factory() as session:
+                now = datetime.now()
+
+                # Upsert: update if exists, create if not
+                existing = session.get(User, user_id)
+                if existing:
+                    existing.email = email
+                    existing.name = name
+                    existing.picture = picture
+                    existing.oauth_provider = oauth_provider
+                    existing.oauth_sub = oauth_sub
+                    existing.last_login_at = now
+                else:
+                    new_user = User(
+                        user_id=user_id,
+                        email=email,
+                        name=name,
+                        picture=picture,
+                        oauth_provider=oauth_provider,
+                        oauth_sub=oauth_sub,
+                        created_at=now,
+                        last_login_at=now,
+                    )
+                    session.add(new_user)
+
+                session.commit()
+                return Ok(None)
+        except Exception as e:
+            return Err(f"Database error: {str(e)}")
+
+    def get_user_by_email(self, email: str) -> Result[User | None, str]:
+        """Get a user record by email.
+
+        Args:
+            email: The email address to search for
+
+        Returns:
+            Ok(User | None) - User model if found, None if not found
+            Err(str) if database error
+        """
+        try:
+            with self._session_factory() as session:
+                user = session.query(User).filter_by(email=email).first()
+                return Ok(user)
+        except Exception as e:
+            return Err(f"Database error: {str(e)}")
+
+    def get_user(self, user_id: str) -> Result[User | None, str]:
+        """Get a user record by ID.
+
+        Args:
+            user_id: The user ID to retrieve
+
+        Returns:
+            Ok(User | None) - User model if found, None if not found
+            Err(str) if database error
+        """
+        try:
+            with self._session_factory() as session:
+                user = session.get(User, user_id)
+                return Ok(user)
         except Exception as e:
             return Err(f"Database error: {str(e)}")

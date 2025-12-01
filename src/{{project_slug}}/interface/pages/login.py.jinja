@@ -10,32 +10,127 @@ from {{ project_slug }}.infrastructure.cache_db.db_repository import DBRepositor
 from {{ project_slug }}.infrastructure.rq_client.rq_client import RQClient
 from {{ project_slug }}.interface.components.job_monitor_component import JobMonitorComponent
 {%- endif %}
+{%- if use_sqlite_db %}
+from {{ project_slug }}.infrastructure.cache_db.db_repository import DBRepository
+{%- endif %}
 
 
 @ui.page("/login")
 async def login_page(request: Request) -> None:
     """Login page where users can choose their authentication method."""
-    with ui.column().classes("absolute-center items-center"):
-        ui.label("Welcome! Please choose how to authenticate:").classes(
-            "text-h4 q-mb-md"
-        )
+    # Custom CSS for better styling
+    ui.add_head_html("""
+        <style>
+            .login-container {
+                max-width: 420px;
+                width: 100%;
+            }
+            .social-button {
+                width: 100%;
+                height: 48px;
+                font-size: 16px;
+                font-weight: 500;
+                text-transform: none;
+                letter-spacing: 0;
+            }
+            .google-button {
+                background-color: white !important;
+                color: #1f1f1f !important;
+                border: 1px solid #dadce0 !important;
+            }
+            .google-button:hover {
+                background-color: #f8f9fa !important;
+                box-shadow: 0 1px 2px 0 rgba(60,64,67,0.3), 0 1px 3px 1px rgba(60,64,67,0.15) !important;
+            }
+            .twitter-button {
+                background-color: #000000 !important;
+                color: white !important;
+            }
+            .twitter-button:hover {
+                background-color: #1a1a1a !important;
+            }
+            .divider-container {
+                display: flex;
+                align-items: center;
+                text-align: center;
+                margin: 24px 0;
+            }
+            .divider-line {
+                flex: 1;
+                border-bottom: 1px solid #dadce0;
+            }
+            .divider-text {
+                padding: 0 16px;
+                color: #5f6368;
+                font-size: 14px;
+            }
+            .security-note {
+                font-size: 13px;
+                color: #5f6368;
+                text-align: center;
+                margin-top: 16px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 6px;
+            }
+            .login-title {
+                font-size: 28px;
+                font-weight: 400;
+                color: #202124;
+                margin-bottom: 8px;
+            }
+            .login-subtitle {
+                font-size: 16px;
+                color: #5f6368;
+                margin-bottom: 32px;
+            }
+        </style>
+    """)
 
-        with ui.card().classes("q-pa-lg"):
+    with ui.column().classes("absolute-center items-center login-container q-pa-md"):
+        # Title
+        ui.label("Log in to Your Account").classes("login-title")
+        ui.label("Choose your preferred sign-in method").classes("login-subtitle")
+
+        with ui.card().classes("w-full q-pa-lg").style("box-shadow: 0 1px 3px 0 rgba(60,64,67,0.3)"):
 {%- if oauth_providers in ['google', 'both'] %}
-            ui.button(
-                "Sign in with Google",
-                icon="login",
-                on_click=lambda: ui.navigate.to("/auth/google"),
-            ).props("color=primary size=lg").classes("q-mb-md")
+            # Google Sign-In Button
+            with ui.button(
+                on_click=lambda: ui.navigate.to("/auth/google")
+            ).props("flat").classes("social-button google-button q-mb-md"):
+                with ui.row().classes("items-center justify-center w-full"):
+                    # Google logo SVG
+                    ui.html("""
+                        <svg width="18" height="18" viewBox="0 0 18 18" style="margin-right: 12px;">
+                            <path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.874 2.684-6.615z"/>
+                            <path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.258c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332C2.438 15.983 5.482 18 9 18z"/>
+                            <path fill="#FBBC05" d="M3.964 10.707c-.18-.54-.282-1.117-.282-1.707s.102-1.167.282-1.707V4.961H.957C.347 6.175 0 7.55 0 9s.348 2.825.957 4.039l3.007-2.332z"/>
+                            <path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.961L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"/>
+                        </svg>
+                    """)
+                    ui.label("Continue with Google")
 {%- endif %}
 
 {%- if oauth_providers in ['twitter', 'both'] %}
-            ui.button(
-                "Sign in with Twitter",
-                icon="login",
-                on_click=lambda: ui.navigate.to("/auth/twitter"),
-            ).props("color=info size=lg").classes("q-mb-md")
+            # Twitter/X Sign-In Button
+            with ui.button(
+                on_click=lambda: ui.navigate.to("/auth/twitter")
+            ).props("flat").classes("social-button twitter-button{% if oauth_providers == 'both' %} q-mb-md{% endif %}"):
+                with ui.row().classes("items-center justify-center w-full"):
+                    # X (Twitter) logo SVG
+                    ui.html("""
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="white" style="margin-right: 12px;">
+                            <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+                        </svg>
+                    """)
+                    ui.label("Continue with X (Twitter)")
 {%- endif %}
+
+            # Security note
+            with ui.row().classes("security-note w-full"):
+                ui.html('<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg>')
+                ui.label("Your data is encrypted. We'll never post on your behalf.")
 
 
 @ui.page("/")
@@ -47,20 +142,47 @@ async def main_page(request: Request) -> RedirectResponse | None:
         return RedirectResponse("/login")
 
     oauth_provider = app.storage.user.get("oauth_provider")
+{%- if use_sqlite_db %}
+    
+    # Save user to database
+    db_repository = DBRepository()
+    user_email = user_info.get("email", "")
+    user_name = user_info.get("name", "")
+    user_picture = user_info.get("picture", "")
+    oauth_sub = user_info.get("sub", "")
+    
+    if user_email and oauth_sub:
+        # Use email as user_id for simplicity
+        save_result = db_repository.save_user(
+            user_id=user_email,
+            email=user_email,
+            oauth_provider=oauth_provider or "unknown",
+            oauth_sub=oauth_sub,
+            name=user_name,
+            picture=user_picture,
+        )
+        # Log any errors but don't block the user
+        if isinstance(save_result, type(save_result)) and hasattr(save_result, 'is_err'):
+            if save_result.is_err():
+                print(f"Warning: Failed to save user to database: {save_result.err()}")
+{%- endif %}
 
     with ui.column().classes("w-full q-pa-md"):
-        ui.label(f"Welcome {user_info.get('name') or user_info.get('email', '')}!").classes(
-            "text-h4"
-        )
-        ui.label(f"Email: {user_info.get('email', '')}")
+        # Welcome header with user info
+        with ui.row().classes("items-center q-mb-md"):
+            if user_info.get("picture"):
+                ui.image(user_info.get("picture")).classes("rounded-full").style("width: 48px; height: 48px;")
+            with ui.column().classes("q-ml-md"):
+                ui.label(f"Welcome back, {user_info.get('name') or user_info.get('email', '')}!").classes("text-h5")
+                ui.label(f"{user_info.get('email', '')}").classes("text-caption text-grey-7")
 
-        with ui.row().classes("q-mt-md q-mb-lg"):
-            ui.button("Logout", on_click=lambda: ui.navigate.to("/logout"))
+        ui.separator().classes("q-my-md")
+
+        with ui.row().classes("q-mt-md q-mb-lg gap-2"):
+            ui.button("Logout", icon="logout", on_click=lambda: ui.navigate.to("/logout")).props("outline")
 {%- if oauth_providers in ['twitter', 'both'] %}
             if oauth_provider == "twitter":
-                ui.button("View My Tweets", on_click=lambda: ui.navigate.to("/tweets")).props(
-                    "color=info"
-                )
+                ui.button("View My Tweets", icon="article", on_click=lambda: ui.navigate.to("/tweets")).props("color=primary")
 {%- endif %}
 
 {%- if async_task_backend == 'redis_rq' and use_sqlite_db %}
