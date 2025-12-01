@@ -108,7 +108,7 @@ async def login_page(request: Request) -> None:
                             <path fill="#FBBC05" d="M3.964 10.707c-.18-.54-.282-1.117-.282-1.707s.102-1.167.282-1.707V4.961H.957C.347 6.175 0 7.55 0 9s.348 2.825.957 4.039l3.007-2.332z"/>
                             <path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.961L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"/>
                         </svg>
-                    """)
+                    """, sanitize=False)
                     ui.label("Continue with Google")
 {%- endif %}
 
@@ -123,13 +123,13 @@ async def login_page(request: Request) -> None:
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="white" style="margin-right: 12px;">
                             <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
                         </svg>
-                    """)
+                    """, sanitize=False)
                     ui.label("Continue with X (Twitter)")
 {%- endif %}
 
             # Security note
             with ui.row().classes("security-note w-full"):
-                ui.html('<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg>')
+                ui.html('<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg>', sanitize=False)
                 ui.label("Your data is encrypted. We'll never post on your behalf.")
 
 
