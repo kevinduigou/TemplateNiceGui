@@ -49,12 +49,6 @@ async def login_page(request: Request) -> None:
             .twitter-button:hover {
                 background-color: #1a1a1a !important;
             }
-            .primary-button {
-                width: 100%;
-                height: 48px;
-                font-size: 16px;
-                font-weight: 500;
-            }
             .divider-container {
                 display: flex;
                 align-items: center;
@@ -91,81 +85,15 @@ async def login_page(request: Request) -> None:
                 color: #5f6368;
                 margin-bottom: 32px;
             }
-            .forgot-password {
-                font-size: 14px;
-                color: #1a73e8;
-                cursor: pointer;
-                text-decoration: none;
-            }
-            .forgot-password:hover {
-                text-decoration: underline;
-            }
-            .mode-subtitle {
-                font-size: 14px;
-                color: #5f6368;
-                margin-bottom: 20px;
-                text-align: center;
-            }
         </style>
     """)
-
-    # State for login/signup mode
-    is_login_mode = ui.state(True)
-    error_message = ui.state("")
-    email_input = ui.state("")
-    password_input = ui.state("")
-
-    def handle_email_password_submit():
-        """Handle email/password login or signup."""
-        email_value = email_input.value.strip()
-        password_value = password_input.value.strip()
-        
-        if not email_value or not password_value:
-            error_message.value = "Please enter both email and password."
-            return
-        
-        # TODO: Implement actual authentication logic here
-        # For now, just show a placeholder message
-        if is_login_mode.value:
-            error_message.value = "Email/password login not yet implemented. Please use social login."
-        else:
-            error_message.value = "Email/password signup not yet implemented. Please use social login."
-
-    def toggle_mode():
-        """Toggle between login and signup mode."""
-        is_login_mode.value = not is_login_mode.value
-        error_message.value = ""
 
     with ui.column().classes("absolute-center items-center login-container q-pa-md"):
         # Title
         ui.label("Log in to Your Account").classes("login-title")
-        
-        with ui.card().classes("w-full q-pa-lg").style("box-shadow: 0 1px 3px 0 rgba(60,64,67,0.3)"):
-            # Mode toggle tabs
-            with ui.row().classes("w-full q-mb-md"):
-                ui.button(
-                    "Log in",
-                    on_click=lambda: setattr(is_login_mode, 'value', True) or setattr(error_message, 'value', "")
-                ).props("flat").classes("flex-1").bind_prop(
-                    "color",
-                    is_login_mode,
-                    lambda v: "primary" if v else "grey"
-                )
-                ui.button(
-                    "Sign up",
-                    on_click=lambda: setattr(is_login_mode, 'value', False) or setattr(error_message, 'value', "")
-                ).props("flat").classes("flex-1").bind_prop(
-                    "color",
-                    is_login_mode,
-                    lambda v: "grey" if v else "primary"
-                )
-            
-            # Mode-specific subtitle
-            ui.label().classes("mode-subtitle").bind_text_from(
-                is_login_mode,
-                lambda v: "Welcome back!" if v else "Create your account in 10 seconds."
-            )
+        ui.label("Choose your preferred sign-in method").classes("login-subtitle")
 
+        with ui.card().classes("w-full q-pa-lg").style("box-shadow: 0 1px 3px 0 rgba(60,64,67,0.3)"):
 {%- if oauth_providers in ['google', 'both'] %}
             # Google Sign-In Button
             with ui.button(
@@ -180,7 +108,7 @@ async def login_page(request: Request) -> None:
                             <path fill="#FBBC05" d="M3.964 10.707c-.18-.54-.282-1.117-.282-1.707s.102-1.167.282-1.707V4.961H.957C.347 6.175 0 7.55 0 9s.348 2.825.957 4.039l3.007-2.332z"/>
                             <path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.961L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"/>
                         </svg>
-                    """, sanitize=False)
+                    """)
                     ui.label("Continue with Google")
 {%- endif %}
 
@@ -188,62 +116,20 @@ async def login_page(request: Request) -> None:
             # Twitter/X Sign-In Button
             with ui.button(
                 on_click=lambda: ui.navigate.to("/auth/twitter")
-            ).props("flat").classes("social-button twitter-button q-mb-md"):
+            ).props("flat").classes("social-button twitter-button{% if oauth_providers == 'both' %} q-mb-md{% endif %}"):
                 with ui.row().classes("items-center justify-center w-full"):
                     # X (Twitter) logo SVG
                     ui.html("""
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="white" style="margin-right: 12px;">
                             <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
                         </svg>
-                    """, sanitize=False)
+                    """)
                     ui.label("Continue with X (Twitter)")
 {%- endif %}
 
-            # Divider
-            with ui.row().classes("divider-container w-full"):
-                ui.html('<div class="divider-line"></div>', sanitize=False)
-                ui.label("or").classes("divider-text")
-                ui.html('<div class="divider-line"></div>', sanitize=False)
-
-            # Email/Password Form
-            with ui.column().classes("w-full gap-3"):
-                # Error message
-                error_label = ui.label().classes("text-negative text-center").bind_text_from(
-                    error_message
-                ).bind_visibility_from(error_message, lambda v: bool(v))
-
-                # Email field
-                email_field = ui.input(
-                    "Email",
-                    placeholder="Enter your email"
-                ).props("type=email autocomplete=email outlined").classes("w-full").bind_value(email_input)
-
-                # Password field
-                password_field = ui.input(
-                    "Password",
-                    placeholder="Enter your password",
-                    password=True,
-                    password_toggle_button=True
-                ).props("type=password autocomplete=current-password outlined").classes("w-full").bind_value(password_input).on(
-                    "keydown.enter",
-                    handle_email_password_submit
-                )
-
-                # Forgot password link (only in login mode)
-                with ui.row().classes("w-full justify-end").bind_visibility_from(is_login_mode):
-                    ui.link("Forgot password?", "#").classes("forgot-password text-sm")
-
-                # Submit button
-                ui.button(
-                    on_click=handle_email_password_submit
-                ).props("color=primary").classes("primary-button").bind_text_from(
-                    is_login_mode,
-                    lambda v: "Continue" if v else "Create Account"
-                )
-
             # Security note
             with ui.row().classes("security-note w-full"):
-                ui.html('<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg>', sanitize=False)
+                ui.html('<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/></svg>')
                 ui.label("Your data is encrypted. We'll never post on your behalf.")
 
 
