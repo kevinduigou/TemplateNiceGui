@@ -143,10 +143,7 @@ def tweets_content() -> None:
             ui.label(f"Error fetching tweets: {str(exception)}").classes("text-negative")
             logging.exception("Failed to fetch tweets")
 
-    # Run the async fetch
-    ui.run_javascript(f"(async () => {{ await fetch_tweets(); }})()", respond=False)
-    
-    # Create a timer to fetch tweets
+    # Create a timer to fetch tweets on page load
     ui.timer(0.1, fetch_tweets, once=True)
 
     ui.button("Back to Home", on_click=lambda: ui.navigate.to("/")).classes("q-mt-md")
