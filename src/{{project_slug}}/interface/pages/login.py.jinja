@@ -175,10 +175,10 @@ def main_content() -> None:
 
         ui.separator().classes("q-my-md")
 
-        with ui.row().classes("q-mt-md q-mb-lg gap-2"):
-            ui.button("Logout", icon="logout", on_click=lambda: ui.navigate.to("/logout")).props("outline")
 {%- if oauth_providers in ['twitter', 'both'] %}
-            if oauth_provider == "twitter":
+        # Quick actions
+        if oauth_provider == "twitter":
+            with ui.row().classes("q-mt-md q-mb-lg gap-2"):
                 ui.button("View My Tweets", icon="article", on_click=lambda: ui.navigate.to("/tweets")).props("color=primary")
 {%- endif %}
 

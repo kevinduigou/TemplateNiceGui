@@ -27,12 +27,45 @@ def frame(navigation_title: str) -> Generator[None, None, None]:
         # User info display (only shown when authenticated)
         user_info = app.storage.user.get("user_info", {})
         if user_info:
-            with ui.row().classes("items-center gap-2"):
-                if user_info.get("picture"):
+            # User profile button with picture or icon
+            if user_info.get("picture"):
+                with ui.button().props("flat round").classes("q-mr-sm p-0"):
                     ui.image(user_info.get("picture")).classes("rounded-full").style("width: 40px; height: 40px;")
-                with ui.column().classes("gap-0"):
-                    ui.label(user_info.get("name") or user_info.get("email", "")).classes("text-body2 font-medium")
-                    ui.label(user_info.get("email", "")).classes("text-caption text-grey-7")
+                    with ui.menu().props("anchor='bottom right' self='top right'"):
+                        with ui.column().classes("q-pa-md gap-2").style("min-width: 250px"):
+                            # User info in dropdown
+                            with ui.row().classes("items-center gap-3 q-pb-sm"):
+                                ui.image(user_info.get("picture")).classes("rounded-full").style("width: 48px; height: 48px;")
+                                with ui.column().classes("gap-0"):
+                                    ui.label(user_info.get("name") or user_info.get("email", "")).classes("text-body2 font-medium")
+                                    ui.label(user_info.get("email", "")).classes("text-caption text-grey-7")
+                            
+                            ui.separator()
+                            
+                            # Logout option
+                            with ui.item(on_click=lambda: ui.navigate.to("/logout")).classes("cursor-pointer"):
+                                with ui.item_section().props("avatar"):
+                                    ui.icon("logout").classes("text-grey-7")
+                                with ui.item_section():
+                                    ui.label("Logout").classes("text-body2")
+            else:
+                with ui.button(icon="account_circle").props("flat round").classes("q-mr-sm"):
+                    with ui.menu().props("anchor='bottom right' self='top right'"):
+                        with ui.column().classes("q-pa-md gap-2").style("min-width: 250px"):
+                            # User info in dropdown
+                            with ui.row().classes("items-center gap-3 q-pb-sm"):
+                                with ui.column().classes("gap-0"):
+                                    ui.label(user_info.get("name") or user_info.get("email", "")).classes("text-body2 font-medium")
+                                    ui.label(user_info.get("email", "")).classes("text-caption text-grey-7")
+                            
+                            ui.separator()
+                            
+                            # Logout option
+                            with ui.item(on_click=lambda: ui.navigate.to("/logout")).classes("cursor-pointer"):
+                                with ui.item_section().props("avatar"):
+                                    ui.icon("logout").classes("text-grey-7")
+                                with ui.item_section():
+                                    ui.label("Logout").classes("text-body2")
     
     with ui.column().classes('absolute-center items-center'):
         yield
