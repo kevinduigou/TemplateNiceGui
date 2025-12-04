@@ -22,7 +22,10 @@ from google.cloud import firestore
 
 from {{ project_slug }}.domain.events import TaskCompleted
 {%- if use_sqlite_db %}
-from {{ project_slug }}.infrastructure.cache_db.db_repository import DBRepository
+from {{ project_slug }}.infrastructure.cache_db.db_repository import (
+    DBRepository,
+    initialize_database,
+)
 {%- endif %}
 
 logger = logging.getLogger(__name__)
@@ -297,8 +300,9 @@ def execute_example_long_task_job(
         job.save_meta()  # type: ignore[no-untyped-call]
 
 {%- if use_sqlite_db %}
-    # Create repository instances within the job
-    db_repository = DBRepository(db_url=db_url)
+    # Initialize database and create repository instances within the job
+    initialize_database(db_url)
+    db_repository = DBRepository()
 
     use_case = ExampleLongTaskUseCase(db_repository=db_repository)
 {%- else %}
@@ -376,8 +380,9 @@ def execute_example_long_task_job(
     logger.info("Job ID: %s", job_id)
 
 {%- if use_sqlite_db %}
-    # Create repository instances within the job
-    db_repository = DBRepository(db_url=db_url)
+    # Initialize database and create repository instances within the job
+    initialize_database(db_url)
+    db_repository = DBRepository()
 
     use_case = ExampleLongTaskUseCase(db_repository=db_repository)
 {%- else %}

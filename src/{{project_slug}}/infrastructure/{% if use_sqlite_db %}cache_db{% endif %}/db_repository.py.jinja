@@ -19,6 +19,7 @@ from {{ project_slug }}.infrastructure.cache_db.db_models import Base, ExampleMo
 # Initialized at application startup
 _engine = None
 _session_factory = None
+_database_url = None
 
 
 def initialize_database(database_url: str | None = None) -> None:
@@ -31,11 +32,14 @@ def initialize_database(database_url: str | None = None) -> None:
         database_url: Database URL. If None, reads from DATABASE_URL env var.
                      Defaults to sqlite:///data/{{ project_slug }}.db if not set.
     """
-    global _engine, _session_factory
+    global _engine, _session_factory, _database_url
     
     # Get database URL from parameter or environment
     if database_url is None:
         database_url = os.getenv("DATABASE_URL", "sqlite:///data/{{ project_slug }}.db")
+    
+    # Store the original database URL
+    _database_url = database_url
     
     # Convert postgresql:// URLs to postgresql+psycopg:// for psycopg3 compatibility
     if database_url.startswith("postgresql://"):
@@ -100,6 +104,21 @@ class DBRepository:
             raise RuntimeError(
                 "Database not initialized. Call initialize_database() at application startup."
             )
+
+    def get_db_url(self) -> str:
+        """Get the database URL that was used to initialize the database.
+        
+        Returns:
+            The database URL string
+            
+        Raises:
+            RuntimeError: If database has not been initialized
+        """
+        if _database_url is None:
+            raise RuntimeError(
+                "Database not initialized. Call initialize_database() at application startup."
+            )
+        return _database_url
 
     def example_exists(self, example_id: str) -> Result[bool, str]:
         """Check if an example record exists in the database.
