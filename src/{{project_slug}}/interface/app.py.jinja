@@ -8,6 +8,13 @@ from nicegui import ui
 # Load environment variables from .env file
 load_dotenv()
 
+{%- if use_sqlite_db %}
+# Initialize database at application startup
+from {{ project_slug }}.infrastructure.cache_db.db_repository import initialize_database  # noqa: E402
+
+initialize_database()
+{%- endif %}
+
 {%- if use_oauth %}
 # Import OAuth routes to register them
 from {{ project_slug }}.interface.pages import (  # noqa: E402

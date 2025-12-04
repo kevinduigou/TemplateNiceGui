@@ -4,14 +4,83 @@ This layer is allowed to use try/except for database I/O.
 All database operations return Result types for error handling.
 """
 
+import os
 from datetime import datetime
 from pathlib import Path
+from typing import final
 
 from result import Err, Ok, Result
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import Session, sessionmaker
 
 from {{ project_slug }}.infrastructure.cache_db.db_models import Base, ExampleModel, User
+
+# Global database engine and session factory
+# Initialized at application startup
+_engine = None
+_session_factory = None
+
+
+def initialize_database(database_url: str | None = None) -> None:
+    """Initialize the database engine and session factory at application startup.
+    
+    This function should be called once when the application starts.
+    It handles PostgreSQL URL conversion and creates the database tables.
+    
+    Args:
+        database_url: Database URL. If None, reads from DATABASE_URL env var.
+                     Defaults to sqlite:///data/{{ project_slug }}.db if not set.
+    """
+    global _engine, _session_factory
+    
+    # Get database URL from parameter or environment
+    if database_url is None:
+        database_url = os.getenv("DATABASE_URL", "sqlite:///data/{{ project_slug }}.db")
+    
+    # Convert postgresql:// URLs to postgresql+psycopg:// for psycopg3 compatibility
+    if database_url.startswith("postgresql://"):
+        database_url = database_url.replace("postgresql://", "postgresql+psycopg://", 1)
+    
+    # Ensure data directory exists for SQLite
+    if database_url.startswith("sqlite:///"):
+        db_path = database_url.replace("sqlite:///", "")
+        Path(db_path).parent.mkdir(parents=True, exist_ok=True)
+    
+    # Create engine with connection pooling and health checks
+    _engine = create_engine(database_url, pool_pre_ping=True)
+    _session_factory = sessionmaker(bind=_engine)
+    
+    # WARNING: create_all() only creates new tables and does not handle schema migrations.
+    # For production use or when modifying existing table schemas, consider implementing
+    # Alembic migrations to safely handle:
+    # - Adding/removing columns to existing tables
+    # - Changing column types or constraints
+    # - Data transformations during schema changes
+    # Current approach only supports: new table creation and initial database setup.
+    Base.metadata.create_all(_engine)
+
+
+@final
+class DatabaseSessionManager:
+    """Creates new SQLAlchemy sessions for each request to avoid transaction issues."""
+
+    __slots__ = ()
+
+    @staticmethod
+    def get_session() -> Session:
+        """Create a new session for each request to avoid transaction conflicts.
+        
+        Returns:
+            A new SQLAlchemy session
+            
+        Raises:
+            RuntimeError: If database has not been initialized
+        """
+        if _session_factory is None:
+            raise RuntimeError(
+                "Database not initialized. Call initialize_database() at application startup."
+            )
+        return _session_factory()
 
 
 class DBRepository:
@@ -21,38 +90,16 @@ class DBRepository:
     It follows the infrastructure layer pattern where try/except is allowed.
     """
 
-    def __init__(self, db_url: str = "sqlite:///data/{{ project_slug }}.db"):
+    def __init__(self) -> None:
         """Initialize database repository.
-
-        Args:
-            db_url: SQLite database URL (default: sqlite:///data/{{ project_slug }}.db)
+        
+        The database must be initialized via initialize_database() before creating
+        a DBRepository instance.
         """
-        self._db_url = db_url
-
-        # Ensure data directory exists for SQLite
-        if db_url.startswith("sqlite:///"):
-            db_path = db_url.replace("sqlite:///", "")
-            Path(db_path).parent.mkdir(parents=True, exist_ok=True)
-
-        self._engine = create_engine(db_url)
-        self._session_factory = sessionmaker(bind=self._engine)
-
-        # WARNING: create_all() only creates new tables and does not handle schema migrations.
-        # For production use or when modifying existing table schemas, consider implementing
-        # Alembic migrations to safely handle:
-        # - Adding/removing columns to existing tables
-        # - Changing column types or constraints
-        # - Data transformations during schema changes
-        # Current approach only supports: new table creation and initial database setup.
-        Base.metadata.create_all(self._engine)
-
-    def get_db_url(self) -> str:
-        """Get the database URL.
-
-        Returns:
-            Database URL string
-        """
-        return self._db_url
+        if _session_factory is None:
+            raise RuntimeError(
+                "Database not initialized. Call initialize_database() at application startup."
+            )
 
     def example_exists(self, example_id: str) -> Result[bool, str]:
         """Check if an example record exists in the database.
@@ -65,7 +112,7 @@ class DBRepository:
             Err(str) if database error
         """
         try:
-            with self._session_factory() as session:
+            with DatabaseSessionManager.get_session() as session:
                 exists = (
                     session.query(ExampleModel)
                     .filter_by(example_id=example_id)
@@ -91,7 +138,7 @@ class DBRepository:
             Err(str) with error message if failed
         """
         try:
-            with self._session_factory() as session:
+            with DatabaseSessionManager.get_session() as session:
                 now = datetime.now()
 
                 # Upsert: update if exists, create if not
@@ -126,7 +173,7 @@ class DBRepository:
             Err(str) if database error
         """
         try:
-            with self._session_factory() as session:
+            with DatabaseSessionManager.get_session() as session:
                 model = session.get(ExampleModel, example_id)
                 return Ok(model)
         except Exception as e:
@@ -140,7 +187,7 @@ class DBRepository:
             Err(str) if database error
         """
         try:
-            with self._session_factory() as session:
+            with DatabaseSessionManager.get_session() as session:
                 models = session.query(ExampleModel).all()
                 return Ok(models)
         except Exception as e:
@@ -157,7 +204,7 @@ class DBRepository:
             Err(str) with error message if failed
         """
         try:
-            with self._session_factory() as session:
+            with DatabaseSessionManager.get_session() as session:
                 model = session.get(ExampleModel, example_id)
                 if model:
                     session.delete(model)
@@ -190,7 +237,7 @@ class DBRepository:
             Err(str) with error message if failed
         """
         try:
-            with self._session_factory() as session:
+            with DatabaseSessionManager.get_session() as session:
                 now = datetime.now()
 
                 # Upsert: update if exists, create if not
@@ -231,7 +278,7 @@ class DBRepository:
             Err(str) if database error
         """
         try:
-            with self._session_factory() as session:
+            with DatabaseSessionManager.get_session() as session:
                 user = session.query(User).filter_by(email=email).first()
                 return Ok(user)
         except Exception as e:
@@ -248,7 +295,7 @@ class DBRepository:
             Err(str) if database error
         """
         try:
-            with self._session_factory() as session:
+            with DatabaseSessionManager.get_session() as session:
                 user = session.get(User, user_id)
                 return Ok(user)
         except Exception as e:
