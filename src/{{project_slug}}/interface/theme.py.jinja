@@ -49,7 +49,11 @@ def frame(navigation_title: str) -> Generator[None, None, None]:
                                 with ui.item_section():
                                     ui.label("Logout").classes("text-body2")
             else:
-                with ui.button(icon="account_circle").props("flat round").classes("q-mr-sm"):
+                with (
+                    ui.button(icon="account_circle")
+                    .props("flat round icon-color=white")
+                    .classes("q-mr-sm text-white")
+                ):
                     with ui.menu().props("anchor='bottom right' self='top right'"):
                         with ui.column().classes("q-pa-md gap-2").style("min-width: 250px"):
                             # User info in dropdown
