@@ -10,29 +10,15 @@ from starlette.responses import RedirectResponse
 from nicegui import app, ui
 
 from {{ project_slug }}.infrastructure.oauth.oauth_config import validate_user_info
+from {{ project_slug }}.interface import theme
 
 
-@ui.page("/tweets")
-async def tweets_page(request: Request) -> Optional[RedirectResponse]:
-    """Display the latest 10 tweets from the authenticated Twitter user."""
-    user_info = app.storage.user.get("user_info", {})
-    oauth_provider = app.storage.user.get("oauth_provider")
-
-    # Redirect to login if not authenticated
-    if not validate_user_info(user_info):
-        app.storage.user.pop("user_info", None)
-        return RedirectResponse("/login")
-
-    # Redirect to home if not a Twitter user
-    if oauth_provider != "twitter":
-        ui.notify("This feature is only available for Twitter users", type="warning")
-        return RedirectResponse("/")
-
-    ui.label("My Latest Tweets").classes("text-h4 q-mb-md")
-
+def tweets_content() -> None:
+    """Render the tweets page content."""
     # Get the OAuth token
     token = app.storage.user.get("oauth_token", {})
     access_token = token.get("access_token")
+    user_info = app.storage.user.get("user_info", {})
     user_id = user_info.get("sub")
 
     if not access_token or not user_id:
@@ -42,7 +28,9 @@ async def tweets_page(request: Request) -> Optional[RedirectResponse]:
         ui.button("Back to Home", on_click=lambda: ui.navigate.to("/")).classes(
             "q-mt-md"
         )
-        return None
+        return
+
+    ui.label("My Latest Tweets").classes("text-h4 q-mb-md")
 
     # Tweet composition section
     with ui.card().classes("q-mb-lg w-full"):
@@ -106,52 +94,81 @@ async def tweets_page(request: Request) -> Optional[RedirectResponse]:
     ui.separator().classes("q-my-md")
 
     # Fetch tweets from Twitter API
-    try:
-        async with httpx.AsyncClient() as client:
-            resp = await client.get(
-                f"https://api.twitter.com/2/users/{user_id}/tweets",
-                headers={"Authorization": f"Bearer {access_token}"},
-                params={"max_results": 10, "tweet.fields": "created_at,public_metrics,text"},
-            )
-
-            if resp.status_code != 200:
-                ui.label(f"Error fetching tweets: {resp.status_code}").classes(
-                    "text-negative"
+    async def fetch_tweets() -> None:
+        """Fetch and display tweets."""
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.get(
+                    f"https://api.twitter.com/2/users/{user_id}/tweets",
+                    headers={"Authorization": f"Bearer {access_token}"},
+                    params={"max_results": 10, "tweet.fields": "created_at,public_metrics,text"},
                 )
-                ui.label(f"Response: {resp.text}").classes("text-caption")
-            else:
-                data = resp.json()
-                tweets = data.get("data", [])
 
-                if not tweets:
-                    ui.label("No tweets found").classes("text-grey")
+                if resp.status_code != 200:
+                    ui.label(f"Error fetching tweets: {resp.status_code}").classes(
+                        "text-negative"
+                    )
+                    ui.label(f"Response: {resp.text}").classes("text-caption")
                 else:
-                    for tweet in tweets:
-                        with ui.card().classes("q-mb-md w-full"):
-                            ui.label(tweet.get("text", "")).classes("text-body1")
+                    data = resp.json()
+                    tweets = data.get("data", [])
 
-                            created_at = tweet.get("created_at", "")
-                            if created_at:
-                                ui.label(f"Posted: {created_at}").classes(
-                                    "text-caption text-grey"
-                                )
+                    if not tweets:
+                        ui.label("No tweets found").classes("text-grey")
+                    else:
+                        for tweet in tweets:
+                            with ui.card().classes("q-mb-md w-full"):
+                                ui.label(tweet.get("text", "")).classes("text-body1")
 
-                            metrics = tweet.get("public_metrics", {})
-                            if metrics:
-                                with ui.row().classes("q-mt-sm"):
-                                    ui.label(f"❤️ {metrics.get('like_count', 0)}").classes(
-                                        "text-caption"
+                                created_at = tweet.get("created_at", "")
+                                if created_at:
+                                    ui.label(f"Posted: {created_at}").classes(
+                                        "text-caption text-grey"
                                     )
-                                    ui.label(
-                                        f"🔁 {metrics.get('retweet_count', 0)}"
-                                    ).classes("text-caption")
-                                    ui.label(
-                                        f"💬 {metrics.get('reply_count', 0)}"
-                                    ).classes("text-caption")
 
-    except Exception as exception:
-        ui.label(f"Error fetching tweets: {str(exception)}").classes("text-negative")
-        logging.exception("Failed to fetch tweets")
+                                metrics = tweet.get("public_metrics", {})
+                                if metrics:
+                                    with ui.row().classes("q-mt-sm"):
+                                        ui.label(f"❤️ {metrics.get('like_count', 0)}").classes(
+                                            "text-caption"
+                                        )
+                                        ui.label(
+                                            f"🔁 {metrics.get('retweet_count', 0)}"
+                                        ).classes("text-caption")
+                                        ui.label(
+                                            f"💬 {metrics.get('reply_count', 0)}"
+                                        ).classes("text-caption")
+
+        except Exception as exception:
+            ui.label(f"Error fetching tweets: {str(exception)}").classes("text-negative")
+            logging.exception("Failed to fetch tweets")
+
+    # Run the async fetch
+    ui.run_javascript(f"(async () => {{ await fetch_tweets(); }})()", respond=False)
+    
+    # Create a timer to fetch tweets
+    ui.timer(0.1, fetch_tweets, once=True)
 
     ui.button("Back to Home", on_click=lambda: ui.navigate.to("/")).classes("q-mt-md")
+
+
+@ui.page("/tweets")
+async def tweets_page(request: Request) -> Optional[RedirectResponse]:
+    """Display the latest 10 tweets from the authenticated Twitter user."""
+    user_info = app.storage.user.get("user_info", {})
+    oauth_provider = app.storage.user.get("oauth_provider")
+
+    # Redirect to login if not authenticated
+    if not validate_user_info(user_info):
+        app.storage.user.pop("user_info", None)
+        return RedirectResponse("/login")
+
+    # Redirect to home if not a Twitter user
+    if oauth_provider != "twitter":
+        ui.notify("This feature is only available for Twitter users", type="warning")
+        return RedirectResponse("/")
+
+    with theme.frame('My Tweets'):
+        tweets_content()
+    
     return None
