@@ -170,13 +170,8 @@ def main_content() -> None:
 {%- endif %}
 
     with ui.column().classes("w-full q-pa-md"):
-        # Welcome header with user info
-        with ui.row().classes("items-center q-mb-md"):
-            if user_info.get("picture"):
-                ui.image(user_info.get("picture")).classes("rounded-full").style("width: 48px; height: 48px;")
-            with ui.column().classes("q-ml-md"):
-                ui.label(f"Welcome back, {user_info.get('name') or user_info.get('email', '')}!").classes("text-h5")
-                ui.label(f"{user_info.get('email', '')}").classes("text-caption text-grey-7")
+        # Welcome message
+        ui.label(f"Welcome back, {user_info.get('name') or user_info.get('email', '')}!").classes("text-h5 q-mb-md")
 
         ui.separator().classes("q-my-md")
 
